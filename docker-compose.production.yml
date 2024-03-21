@@ -20,7 +20,7 @@ services:
             - "80:80"
             - "443:443"
         environment:
-            DHPARAM_SKIP: true
+            DHPARAM_SKIP: "true"
         volumes:
             - certs:/etc/nginx/certs:ro
             - vhost:/etc/nginx/vhost.d
@@ -32,7 +32,7 @@ services:
         container_name: nginx-proxy-acme
         restart: always
         environment:
-            DEFAULT_EMAIL: no-reply@manytask.org
+            DEFAULT_EMAIL: no-reply@sreweek.ru
             NGINX_PROXY_CONTAINER: nginx-proxy
         volumes:
             - acme:/etc/acme.sh
@@ -42,16 +42,16 @@ services:
             - /var/run/docker.sock:/var/run/docker.sock:ro
 
     manytask:
-        image: manytask/manytask:latest  # set SPECIFIC version you'll use
+        image: manytask:build  # set SPECIFIC version you'll use
         container_name: manytask
         restart: always
         expose:
             - "5050"
         env_file: .env
         environment:
-            VIRTUAL_HOST: py.manytask.org
+            VIRTUAL_HOST: manytask.sreweek.ru
             VIRTUAL_PORT: 5050
-            LETSENCRYPT_HOST: py.manytask.org
+            LETSENCRYPT_HOST: manytask.sreweek.ru
         volumes:
             - cache:/cache
             - solutions:/solutions
