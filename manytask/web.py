@@ -176,9 +176,8 @@ def signup() -> ResponseReturnValue:
         
             userdata = whitelisted.get(email)
             user = glab.User(
-                userdata["username"],
-                userdata["firstname"],
-                userdata["lastname"],
+                userdata["loginAndekspasport"],
+                userdata["name"],
                 email,
                 password=request.form["password"],
             )
@@ -187,8 +186,7 @@ def signup() -> ResponseReturnValue:
 
             user = glab.User(
                 username=request.form["username"].strip(),
-                firstname=request.form["firstname"].strip(),
-                lastname=request.form["lastname"].strip(),
+                name=request.form["firstname"].strip() + " " + request.form["lastname"].strip(),
                 email=request.form["email"].strip(),
                 password=request.form["password"],
             )

@@ -16,8 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class User:
     username: str
-    firstname: str
-    lastname: str
+    name: str
     email: str
     password: str
 
@@ -97,7 +96,7 @@ class GitLabApi:
             {
                 "email": user.email,
                 "username": user.username,
-                "name": user.firstname + " " + user.lastname,
+                "name": user.name,
                 "external": False,
                 "password": user.password,
                 "skip_confirmation": True,
