@@ -146,6 +146,7 @@ def signup() -> ResponseReturnValue:
     if request.method == "GET":
         return render_template(
             "signup.html",
+            use_registration_secret=course.use_registration_secret,
             use_whitelist=use_whitelist,
             course_name=course.name,
             course_favicon=course.favicon,
@@ -157,8 +158,9 @@ def signup() -> ResponseReturnValue:
     
     try:
 
-        if not secrets.compare_digest(request.form["secret"], course.registration_secret):
-            raise Exception("Invalid registration secret")
+        if course.use_registration_secret:
+            if not secrets.compare_digest(request.form["secret"], course.registration_secret):
+                raise Exception("Invalid registration secret")
     
         if use_whitelist:
     

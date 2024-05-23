@@ -46,6 +46,7 @@ class Course:
         googledoc_api: gdoc.GoogleDocApi,
         gitlab_api: glab.GitLabApi,
         solutions_api: solutions.SolutionsApi,
+        use_registration_secret: bool,
         registration_secret: str,
         cache: BaseCache,
         manytask_version: str | None = None,
@@ -56,6 +57,7 @@ class Course:
         self.gitlab_api = gitlab_api
         self.solutions_api = solutions_api
 
+        self.use_registration_secret = use_registration_secret
         self.registration_secret = registration_secret
 
         self._cache = cache

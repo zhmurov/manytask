@@ -167,6 +167,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
         gdoc_api,
         gitlab_api,
         solutions_api,
+        app.app_config.use_registration_secret,
         app.app_config.registration_secret,
         cache,
         manytask_version=manytask_version,
