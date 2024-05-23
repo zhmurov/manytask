@@ -161,6 +161,9 @@ def signup() -> ResponseReturnValue:
         if course.use_registration_secret:
             if not secrets.compare_digest(request.form["secret"], course.registration_secret):
                 raise Exception("Invalid registration secret")
+            
+        if not secrets.compare_digest(request.form["password"], request.form["password2"]):
+                raise Exception("Passwords don't match")
     
         if use_whitelist:
     
