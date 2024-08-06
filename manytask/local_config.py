@@ -33,6 +33,7 @@ class LocalConfig:
     # google public sheet
     gdoc_spreadsheet_id: str
     gdoc_scoreboard_sheet: int
+    show_allscores: bool
     use_whitelist: bool
     gdoc_whitelist_id: str
     gdoc_whitelist_sheet: int
@@ -64,6 +65,7 @@ class LocalConfig:
             # google public sheet
             gdoc_spreadsheet_id=os.environ["GDOC_SPREADSHEET_ID"],
             gdoc_scoreboard_sheet=int(os.environ.get("GDOC_SCOREBOARD_SHEET", 0)),
+            show_allscores=os.environ.get("SHOW_ALLSCORES", "True").lower() in ("true", "1", "yes"),
             use_whitelist=os.environ.get("USE_WHITELIST", "False").lower() in ("true", "1", "yes"),
             gdoc_whitelist_id=os.environ.get("GDOC_WHITELIST_ID", ""),
             gdoc_whitelist_sheet=int(os.environ.get("GDOC_WHITELIST_SHEET", 0)),
@@ -100,6 +102,7 @@ class DebugLocalConfig(LocalConfig):
     gdoc_spreadsheet_id: str = ""
     gdoc_scoreboard_sheet: int = 0
 
+    show_allscores: bool = True
     use_whitelist: bool = False
     gdoc_whitelist_id: str = ""
     gdoc_whitelist_sheet: int = 0
@@ -111,6 +114,7 @@ class DebugLocalConfig(LocalConfig):
             gdoc_account_credentials_base64=os.environ["GDOC_ACCOUNT_CREDENTIALS_BASE64"],
             gdoc_spreadsheet_id=os.environ.get("GDOC_SPREADSHEET_ID", "1cRah9NC5Nl7_NyzttC3Q5BtrnbdO6KyaG7gx5ZGusTM"),
             gdoc_scoreboard_sheet=int(os.environ.get("GDOC_SCOREBOARD_SHEET", 0)),
+            show_allscores=os.environ.get("SHOW_ALLSCORES", "True").lower() in ("true", "1", "yes"),
             use_whitelist=os.environ.get("USE_WHITELIST", "False").lower() in ("true", "1", "yes"),
             gdoc_whitelist_id=os.environ.get("GDOC_WHITELIST_ID", "1Yxkc5srgER8L8MfryBHuHUBcHjw3QvARoRvvDPOLIpM"),
             gdoc_whitelist_sheet=int(os.environ.get("GDOC_WHITELIST_SHEET", 0)),

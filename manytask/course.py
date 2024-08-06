@@ -48,6 +48,7 @@ class Course:
         solutions_api: solutions.SolutionsApi,
         use_registration_secret: bool,
         registration_secret: str,
+        show_allscores: bool,
         cache: BaseCache,
         manytask_version: str | None = None,
         *,
@@ -59,6 +60,8 @@ class Course:
 
         self.use_registration_secret = use_registration_secret
         self.registration_secret = registration_secret
+
+        self.show_allscores = show_allscores
 
         self._cache = cache
 
