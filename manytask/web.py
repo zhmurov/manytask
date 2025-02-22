@@ -3,7 +3,6 @@ import secrets
 from datetime import datetime, timedelta
 
 import gitlab
-import requests
 from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for
@@ -255,9 +254,9 @@ def create_project() -> ResponseReturnValue:
     gitlab_access_token: str = session["gitlab"]["oauth_access_token"]
     try:
         student = course.gitlab_api.get_authenticated_student(gitlab_access_token)
-    except requests.exceptions.HTTPError as ex:
-        logger.error(f"Authorization error: {ex.args[0]}")
-        return render_template("signup.html", error_message=ex.args[0], course_name=course.name)
+    except Exception as ex:
+        logger.error(f"Authorization error: {ex}")
+        return render_template("signup.html", error_message=ex, course_name=course.name)
 
     # ---- render page ---- #
     if request.method == "GET":
