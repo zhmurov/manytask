@@ -171,7 +171,7 @@ def signup() -> ResponseReturnValue:
         
             userdata = whitelisted.get(email)
             user = glab.User(
-                userdata["username"],
+                userdata["username"].replace("@", "_at_"),
                 userdata["firstname"],
                 userdata["lastname"],
                 email,
