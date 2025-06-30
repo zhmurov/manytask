@@ -110,7 +110,7 @@ def mock_storage_api(mock_course, mock_student, mock_task, mock_group):  # noqa:
             )
             self.course_name = TEST_COURSE_NAME
 
-        def store_score(self, _course_name, student, repo_name, task_name, update_fn):
+        def store_score(self, _course_name, student, task_name, update_fn):
             old_score = self.scores.get(f"{student.username}_{task_name}", 0)
             new_score = update_fn("", old_score)
             self.scores[f"{student.username}_{task_name}"] = new_score

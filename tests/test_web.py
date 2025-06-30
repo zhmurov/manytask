@@ -126,7 +126,7 @@ def mock_storage_api(mock_course):  # noqa: C901
         def get_bonus_score(_course_name, _username):
             return 10
 
-        def sync_stored_user(self, _course_name, student, repo_name, course_admin):
+        def sync_stored_user(self, _course_name, student, course_admin):
             self.stored_user.course_admin = self.stored_user.course_admin or course_admin
 
         @staticmethod

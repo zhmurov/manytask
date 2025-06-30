@@ -220,7 +220,6 @@ def create_project(course_name: str) -> ResponseReturnValue:
     app.storage_api.sync_stored_user(
         course.course_name,
         student,
-        app.rms_api.get_url_for_repo(student.username, course.gitlab_course_students_group),
         app.gitlab_api.check_is_course_admin(student.id, course.gitlab_course_group),
     )
 

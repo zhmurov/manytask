@@ -144,7 +144,6 @@ class DataBaseApi(StorageApi):
         self,
         course_name: str,
         student: Student,
-        repo_name: str,
         course_admin: bool,
     ) -> StoredUser:
         """Method for sync user's gitlab and stored data
@@ -157,7 +156,7 @@ class DataBaseApi(StorageApi):
 
         with Session(self.engine) as session:
             course = self._get(session, models.Course, name=course_name)
-            user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
+            user_on_course = self._get_or_create_user_on_course(session, student, course)
 
             user_on_course.is_course_admin = user_on_course.is_course_admin or course_admin
 
@@ -227,7 +226,6 @@ class DataBaseApi(StorageApi):
         self,
         course_name: str,
         student: Student,
-        repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
     ) -> int:
@@ -248,7 +246,7 @@ class DataBaseApi(StorageApi):
         with Session(self.engine) as session:
             try:
                 course = self._get(session, models.Course, name=course_name)
-                user_on_course = self._get_or_create_user_on_course(session, student, course, repo_name)
+                user_on_course = self._get_or_create_user_on_course(session, student, course)
                 session.commit()
 
                 try:
@@ -748,7 +746,6 @@ class DataBaseApi(StorageApi):
         session: Session,
         student: Student,
         course: models.Course,
-        repo_name: str | None = None,
     ) -> models.UserOnCourse:
         first_name, last_name = student.name.split()  # TODO: come up with how to separate names
         user = self._get_or_create(
@@ -759,15 +756,7 @@ class DataBaseApi(StorageApi):
             last_name=last_name,
         )
 
-        defaults = {}
-        if repo_name is not None:
-            defaults["repo_name"] = repo_name
-        else:
-            defaults["repo_name"] = ""
-
-        user_on_course = self._get_or_create(
-            session, models.UserOnCourse, defaults=defaults, user_id=user.id, course_id=course.id
-        )
+        user_on_course = self._get_or_create(session, models.UserOnCourse, user_id=user.id, course_id=course.id)
 
         return user_on_course
 

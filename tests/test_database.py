@@ -189,10 +189,10 @@ def test_get_courses_names_with_courses(db_api_with_two_initialized_courses):
         [FIRST_COURSE_NAME, SECOND_COURSE_NAME]
     )
 
-    db_api_with_two_initialized_courses.sync_stored_user(FIRST_COURSE_NAME, student1, "repo1", True)
-    db_api_with_two_initialized_courses.sync_stored_user(SECOND_COURSE_NAME, student2, "repo2", False)
-    db_api_with_two_initialized_courses.sync_stored_user(FIRST_COURSE_NAME, student3, "repo3", False)
-    db_api_with_two_initialized_courses.sync_stored_user(SECOND_COURSE_NAME, student3, "repo3", True)
+    db_api_with_two_initialized_courses.sync_stored_user(FIRST_COURSE_NAME, student1, True)
+    db_api_with_two_initialized_courses.sync_stored_user(SECOND_COURSE_NAME, student2, False)
+    db_api_with_two_initialized_courses.sync_stored_user(FIRST_COURSE_NAME, student3, False)
+    db_api_with_two_initialized_courses.sync_stored_user(SECOND_COURSE_NAME, student3, True)
 
     assert db_api_with_two_initialized_courses.get_user_courses_names(student1) == [FIRST_COURSE_NAME]
     assert db_api_with_two_initialized_courses.get_user_courses_names(student2) == [SECOND_COURSE_NAME]

@@ -56,7 +56,6 @@ class StorageApi(ABC):
         self,
         course_name: str,
         student: Student,
-        repo_name: str,
         course_admin: bool,
     ) -> StoredUser: ...
 
@@ -77,7 +76,6 @@ class StorageApi(ABC):
         self,
         course_name: str,
         student: Student,
-        repo_name: str,
         task_name: str,
         update_fn: Callable[..., Any],
     ) -> int: ...
