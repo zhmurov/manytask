@@ -50,7 +50,7 @@ Below is a brief description of each main file in the project:
 1. Connect to the server and go to `/srv/`.
 2. Create your own directory inside `/srv/`.
 3. Clone your Manytask branch into it.
-4. Copy `.env.example` to `.env`.
+4. Copy `.env.template` to `.env`.
 5. Fill in `.env`:
 
 | Variable                 | Description                                                 |
@@ -120,7 +120,7 @@ Use `WSL 2`, if you are using Windows
    psql postgresql://<username>:<password>@localhost:5432/<database name>
    ```
 
-4. Copy `.env.example` to `.env` in your working folder. In this file:
+4. Copy `.env.template` to `.env` in your working folder. In this file:
 - Set `FLASK_SECRET_KEY` to a random string
 - Set `DATABASE_URL` to `psql` URL above
 - Set the username for the first instance admin with 'INITIAL_INSTANCE_ADMIN'
