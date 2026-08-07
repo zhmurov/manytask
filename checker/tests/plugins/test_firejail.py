@@ -12,7 +12,12 @@ import pytest
 from pydantic import ValidationError
 
 from checker.exceptions import PluginExecutionFailed
-from checker.plugins.firejail import SafeRunScriptPlugin
+from checker.plugins import firejail as firejail_module
+from checker.plugins.firejail import (
+    SafeRunScriptPlugin,
+    disable_firejail,
+    is_firejail_disabled,
+)
 
 PATTERN_ENV = re.compile(r"(?P<name>\S+)=.*")
 PATH = "PATH"
@@ -30,6 +35,62 @@ def in_home(path: str) -> Path:
     return HOME.joinpath(path)
 
 
+class TestFirejailDisabled:
+    """`--no-firejail` behaviour. Deliberately not marked `firejail`: the whole point
+    is that these work on a host where firejail is not installed (e.g. macOS)."""
+
+    @pytest.fixture(autouse=True)
+    def _reset_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The switch is a module global; never leak it between tests."""
+        monkeypatch.setattr(firejail_module, "_firejail_disabled", False)
+
+    def test_enabled_by_default(self) -> None:
+        assert is_firejail_disabled() is False
+
+    def test_disable_firejail_sets_the_flag(self) -> None:
+        disable_firejail()
+
+        assert is_firejail_disabled() is True
+
+    @pytest.mark.parametrize(
+        "env_name",
+        ["CHECKER_NO_FIREJAIL", "NO_FIREJAIL", "CHECKER_FIREJAIL"],
+    )
+    def test_environment_can_not_disable_the_sandbox(
+        self, monkeypatch: pytest.MonkeyPatch, env_name: str
+    ) -> None:
+        """The sandboxed code controls the environment (students own their CI variables),
+        so no environment variable may switch the sandbox off."""
+        monkeypatch.setenv(env_name, "1")
+
+        assert is_firejail_disabled() is False
+
+    def test_runs_script_without_firejail(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        disable_firejail()
+        # firejail must never be probed nor executed when disabled
+        monkeypatch.setattr(
+            SafeRunScriptPlugin,
+            "_check_firejail_available",
+            lambda self: pytest.fail("firejail should not be probed when disabled"),
+        )
+
+        args = SafeRunScriptPlugin.Args(origin="/tmp", script="echo Hello")
+        output = SafeRunScriptPlugin()._run(args, verbose=True)
+
+        assert "Hello" in output.output
+        assert "Firejail disabled by --no-firejail" in output.output
+
+    def test_failure_still_propagates_without_firejail(self) -> None:
+        """Disabling the sandbox must not turn a failing script into a pass."""
+        disable_firejail()
+
+        args = SafeRunScriptPlugin.Args(origin="/tmp", script="false")
+        with pytest.raises(PluginExecutionFailed):
+            SafeRunScriptPlugin()._run(args, verbose=True)
+
+
 @pytest.mark.firejail
 class TestSafeRunScriptPlugin:
     @pytest.mark.parametrize(
@@ -41,7 +102,9 @@ class TestSafeRunScriptPlugin:
             ({"origin": "/tmp/123", "script": "echo Hello", "timeout": 10}, None),
         ],
     )
-    def test_plugin_args(self, parameters: dict[str, Any], expected_exception: Exception | None) -> None:
+    def test_plugin_args(
+        self, parameters: dict[str, Any], expected_exception: Exception | None
+    ) -> None:
         if expected_exception:
             with pytest.raises(expected_exception):
                 SafeRunScriptPlugin.Args(**parameters)
@@ -58,7 +121,9 @@ class TestSafeRunScriptPlugin:
             ("echo Hello && false", "Hello", PluginExecutionFailed),
         ],
     )
-    def test_run_script(self, script: str, output: str, expected_exception: Exception | None) -> None:
+    def test_run_script(
+        self, script: str, output: str, expected_exception: Exception | None
+    ) -> None:
         plugin = SafeRunScriptPlugin()
         args = SafeRunScriptPlugin.Args(origin="/tmp", script=script)
 
@@ -79,7 +144,9 @@ class TestSafeRunScriptPlugin:
             ("sleep 2", 1, PluginExecutionFailed),
         ],
     )
-    def test_timeout(self, script: str, timeout: float, expected_exception: Exception | None) -> None:
+    def test_timeout(
+        self, script: str, timeout: float, expected_exception: Exception | None
+    ) -> None:
         # TODO: check if timeout float
         plugin = SafeRunScriptPlugin()
         args = SafeRunScriptPlugin.Args(origin="/tmp", script=script, timeout=timeout)
@@ -100,7 +167,9 @@ class TestSafeRunScriptPlugin:
     )
     def test_hide_evns(self, env_whitelist) -> None:
         plugin = SafeRunScriptPlugin()
-        args = SafeRunScriptPlugin.Args(origin="/tmp", script="printenv", env_whitelist=env_whitelist)
+        args = SafeRunScriptPlugin.Args(
+            origin="/tmp", script="printenv", env_whitelist=env_whitelist
+        )
 
         res_lines = [line.strip() for line in plugin._run(args).output.splitlines()]
         envs: list[str] = []
@@ -212,12 +281,21 @@ class TestSafeRunScriptPlugin:
     )
     def test_no_extra_output(self, test_file_content: str) -> None:
         def _generate_random_content() -> str:
-            return "".join([RANDOM_LINES[randrange(0, len(RANDOM_LINES))] for _ in range(0, randrange(0, 100))])
+            return "".join(
+                [
+                    RANDOM_LINES[randrange(0, len(RANDOM_LINES))]
+                    for _ in range(0, randrange(0, 100))
+                ]
+            )
 
         tmp_dir = in_home("tmp")
         tmp_dir.mkdir(parents=True, exist_ok=True)
         file_path = tmp_dir.joinpath("tmp.txt")
-        file_content = test_file_content if test_file_content != RANDOM_CONTENT else _generate_random_content()
+        file_content = (
+            test_file_content
+            if test_file_content != RANDOM_CONTENT
+            else _generate_random_content()
+        )
         with open(file_path, "w") as f:
             f.write(file_content)
 
@@ -231,9 +309,13 @@ class TestSafeRunScriptPlugin:
 
         file_path.unlink()
 
-    @pytest.mark.parametrize("env_additional", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}])
+    @pytest.mark.parametrize(
+        "env_additional", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}]
+    )
     @pytest.mark.parametrize("env_whitelist", [[], ["A"], ["A", "C"]])
-    @pytest.mark.parametrize("mocked_env", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}])
+    @pytest.mark.parametrize(
+        "mocked_env", [{}, {"A": "B"}, {"A": "C"}, {"A": "B", "C": "D"}]
+    )
     def test_run_with_environment_variable(
         self,
         env_additional: dict[str, str],
