@@ -11,6 +11,29 @@ from .scripts import PluginABC, RunScriptPlugin
 
 HOME_PATH = str(Path.home())
 
+# Process-local kill switch for the sandbox, set only by the `--no-firejail` CLI flag.
+#
+# Deliberately NOT an environment variable: the environment is attacker-controlled in the
+# threat model this sandbox exists for. Students own the `.gitlab-ci.yml` of their repository
+# and can define arbitrary CI variables, so an env-var switch could be flipped by the very
+# code being sandboxed, and would silently propagate into every subprocess. A module global
+# can only be set by an explicit CLI argument in this process.
+_firejail_disabled = False
+
+
+def disable_firejail() -> None:
+    """Disable firejail sandboxing for this process (`--no-firejail`).
+
+    Must only be called from CLI argument handling, never from config or the environment.
+    """
+    global _firejail_disabled
+    _firejail_disabled = True
+
+
+def is_firejail_disabled() -> bool:
+    """Whatever firejail sandboxing is disabled for this process."""
+    return _firejail_disabled
+
 
 class SafeRunScriptPlugin(PluginABC):
     """Wrapper over RunScriptPlugin to run students scripts safety.
@@ -23,8 +46,12 @@ class SafeRunScriptPlugin(PluginABC):
 
     class Args(PluginABC.Args):
         origin: str
-        script: Union[str, list[str]]  # as pydantic does not support | in older python versions
-        timeout: Union[float, None] = None  # as pydantic does not support | in older python versions
+        script: Union[
+            str, list[str]
+        ]  # as pydantic does not support | in older python versions
+        timeout: Union[float, None] = (
+            None  # as pydantic does not support | in older python versions
+        )
         input: Optional[Path] = None
 
         env_additional: dict[str, str] = dict()
@@ -45,8 +72,10 @@ class SafeRunScriptPlugin(PluginABC):
         result = subprocess.run(["firejail", "--version"], capture_output=True)
         return result.returncode == 0, result.stderr.decode("utf-8")
 
-    def _fallback_to_run_script(self, args: Args, verbose: bool) -> PluginOutput:
-        """Fallback to RunScriptPlugin when firejail is not available."""
+    def _fallback_to_run_script(
+        self, args: Args, verbose: bool, reason: str = "Firejail is not installed"
+    ) -> PluginOutput:
+        """Fallback to RunScriptPlugin when firejail is not available or disabled."""
         run_args = RunScriptPlugin.Args(
             origin=args.origin,
             script=args.script,
@@ -56,7 +85,7 @@ class SafeRunScriptPlugin(PluginABC):
         )
         output = RunScriptPlugin()._run(args=run_args, verbose=verbose)
         if verbose:
-            output.output = f"Firejail is not installed. Fallback to RunScriptPlugin.\n{output.output}"
+            output.output = f"{reason}. Fallback to RunScriptPlugin.\n{output.output}"
         return output
 
     def _build_whitelist_paths(self, args: Args) -> set[str]:
@@ -122,13 +151,21 @@ class SafeRunScriptPlugin(PluginABC):
         return command
 
     def _run(self, args: Args, *, verbose: bool = False) -> PluginOutput:  # type: ignore[override]
+        # sandboxing explicitly disabled from the CLI (`--no-firejail`)
+        if is_firejail_disabled():
+            return self._fallback_to_run_script(
+                args, verbose, reason="Firejail disabled by --no-firejail"
+            )
+
         # test if firejail script is available
         # TODO: test fallback
         is_available, error_output = self._check_firejail_available()
         if not is_available:
             if args.allow_fallback:
                 return self._fallback_to_run_script(args, verbose)
-            raise PluginExecutionFailed("Firejail is not installed", output=error_output)
+            raise PluginExecutionFailed(
+                "Firejail is not installed", output=error_output
+            )
 
         command = self._build_firejail_command(args)
 

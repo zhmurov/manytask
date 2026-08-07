@@ -68,6 +68,8 @@ items:
         href: manytask_yml_reference.md
       - name: .checker.yml reference
         href: checker_yml_reference.md
+      - name: checker CLI reference
+        href: checker_cli_reference.md
       - name: Checker built-in plugins
         href: checker_plugins.md
       - name: REST API

@@ -183,6 +183,13 @@ Determines which tasks are selected for grading when running `checker grade`.
 | `last_commit_changes` | Selects all tasks that have files changed in the last commit. *(default)* |
 | `files_changed` | *(Not yet implemented)* Compares current state against the previous commit. |
 
+Every strategy reads the git history of the repository being graded. The selection can be
+overridden from the command line with `checker grade --all-tasks` (grade every enabled task)
+or `-t`/`-g` (grade specific tasks/groups) — useful for grading a student repository locally.
+Overriding skips detection completely, so no git repository is required, and no score is
+reported unless `--submit-score` is passed. See the
+[checker CLI reference](./checker_cli_reference.md#overriding-task-detection).
+
 ### `search_plugins`
 
 List of directory paths (relative to the repository root) where the checker will look for custom plugin Python files.

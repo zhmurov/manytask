@@ -104,8 +104,10 @@ The template wires this in two pipelines:
    the student's solution comes from the checkout (`.`), the hidden tests come from the
    baked `/opt/course`. To report the score to the web app, enable the
    `report_pipeline` (`report_score_manytask`) in `.checker.yml` — `checker grade`
-   always runs it — and provide a `MANYTASK_TOKEN` CI variable. (The grade
-   `--submit-score` flag is currently a no-op in checker, so it does not report.)
+   runs it on every CI run — and provide a `MANYTASK_TOKEN` CI variable. To grade a
+   student checkout **locally** instead, pass `--all-tasks` (or `-t`/`-g`): that skips
+   changes detection and, unless you add `--submit-score`, does not report anything.
+   See the [checker CLI reference](./checker_cli_reference.md#checker-grade).
 
 Because the image lives in the **private** project's registry but student repos are
 forks of the **public** project, students pull it across projects via a
