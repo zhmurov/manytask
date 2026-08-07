@@ -123,8 +123,14 @@ Failing scripts still fail — the flag removes the sandbox, not the verdict.
 > filesystem access. Use it only on code you are willing to run directly, and never in CI —
 > install firejail on the Linux runner instead.
 
-The same switch exists per stage: `allow_fallback: true` on a `safe_run_script` stage in
-`.checker.yml` falls back automatically whenever firejail is missing.
+The sandbox can **only** be switched off by this explicit command-line argument. There is
+deliberately no environment variable for it: in CI both the environment and the repository
+contents are controlled by the student whose code is being sandboxed, so an env-var switch
+could be flipped by the very code the sandbox exists to contain.
+
+The one config-level relaxation is per stage: `allow_fallback: true` on a `safe_run_script`
+stage in `.checker.yml` falls back automatically whenever firejail is missing. That file
+lives in the private repository, so it is the course author's decision, not the student's.
 
 `--no-firejail` is also available on `checker check`.
 
