@@ -46,6 +46,8 @@ items:
         href: checker_config.md
       - name: Manytask configuration
         href: manytask_config.md
+      - name: Releaser CI setup
+        href: releaser_ci.md
       - name: Running the course
         href: running_course.md
       - name: Checker pipelines and plugins

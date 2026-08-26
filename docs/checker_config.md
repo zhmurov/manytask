@@ -138,6 +138,9 @@ deadlines:
 
 ### 3. `.releaser-ci.yml` — CI for Export
 
+> A full, job-by-job walkthrough of this file (validate → build testenv → check → export) lives in
+> [Releaser CI setup](./releaser_ci.md). The snippet below is the minimal export-only form.
+
 ```yaml
 variables:
   REGISTRY: gitlab.manytask.org:5050/sandbox/public

@@ -171,6 +171,7 @@ Full step-by-step instructions live in the template's own
 ## Related references
 
 - [Course as Code](./course_as_code.md) — the underlying concept
+- [Releaser CI setup](./releaser_ci.md) — `.releaser-ci.yml` explained job by job
 - [Private repository](./private_repo.md) — how the private repo is structured
 - [.checker.yml reference](./checker_yml_reference.md) — every field explained
 - [.manytask.yml reference](./manytask_yml_reference.md) — schedule and grades schema
