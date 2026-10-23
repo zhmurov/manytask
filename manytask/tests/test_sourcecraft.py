@@ -10,8 +10,10 @@ will get a false negative from the existence check and a 500
 """
 
 from http import HTTPStatus
+from typing import Any
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 from manytask.abstract import RmsApiException, RmsUser
@@ -216,25 +218,28 @@ def test_get_rms_user_by_username_prefers_yandex_login(sourcecraft_api):
 # ---------------------------------------------------------------------------
 
 
-def test_create_project_is_idempotent_when_repo_already_exists(sourcecraft_api):
+@pytest.mark.parametrize("status", [HTTPStatus.BAD_REQUEST, HTTPStatus.CONFLICT, HTTPStatus.UNPROCESSABLE_ENTITY])
+def test_create_project_is_idempotent_when_repo_already_exists(sourcecraft_api: SourceCraftApi, status: int) -> None:
     """A repeated create_project call after a partial setup must not raise.
 
     Real-world scenario: first attempt created the repo but the follow-up
     POST /roles failed with 504. On the next call, POST /orgs/.../repos
-    returns 409 SlugIsNotAvailable, which used to bubble up as
-    RmsApiException and blocked recovery. We now treat it as success and
-    let _add_repo_role finish the job.
+    returns SlugIsNotAvailable. Accept client-error statuses only after
+    verifying that the student repo exists, then let _add_repo_role finish
+    the job.
     """
     rms_user = RmsUser(id=TEST_RMS_ID, username=SOURCECRAFT_USERNAME, name="Test User")
 
-    def side_effect(method, path, **kwargs):
+    def side_effect(method: str, path: str, **kwargs: Any) -> httpx.Response:
         if method == "GET" and path == f"repos/{TEST_ORG}/{TEST_PUBLIC_REPO}":
             return _make_response(HTTPStatus.OK, {"id": 42})
         if method == "POST" and path == f"orgs/{TEST_ORG}/repos":
             return _make_response(
-                HTTPStatus.CONFLICT,
+                status,
                 {"error_code": "SlugIsNotAvailable", "message": "slug taken"},
             )
+        if method == "GET" and path == f"repos/{TEST_ORG}/{TEST_STUDENTS_GROUP}-{SOURCECRAFT_USERNAME}":
+            return _make_response(HTTPStatus.OK, {"id": 43})
         if method == "POST" and path.endswith("/roles"):
             return _make_response(HTTPStatus.OK)
         raise AssertionError(f"unexpected request {method} {path}")
@@ -315,3 +320,55 @@ def test_add_repo_role_does_not_retry_on_client_error(sourcecraft_api):
             sourcecraft_api._add_repo_role(repo_slug, "developer", TEST_RMS_ID)
 
     assert call_count["n"] == 1, "4xx must not be retried"
+
+
+@pytest.mark.parametrize("status", [HTTPStatus.BAD_REQUEST, HTTPStatus.CONFLICT, HTTPStatus.UNPROCESSABLE_ENTITY])
+def test_public_repo_creation_reuses_verified_existing_slug(sourcecraft_api: SourceCraftApi, status: int) -> None:
+    repo_slug = "existing-public"
+    repo_path = f"repos/{TEST_ORG}/{repo_slug}"
+    responses = [
+        httpx.Response(status, json={"error_code": "SlugIsNotAvailable", "message": "slug unavailable"}),
+        httpx.Response(HTTPStatus.OK, json={"id": "existing-repo", "slug": repo_slug}),
+        httpx.Response(HTTPStatus.OK),
+    ]
+    with patch.object(sourcecraft_api, "_request", side_effect=responses) as request:
+        sourcecraft_api.create_public_repo("unused", repo_slug)
+    assert [call.args for call in request.call_args_list] == [
+        ("POST", f"orgs/{TEST_ORG}/repos"),
+        ("GET", repo_path),
+        ("PATCH", f"{TEST_ORG}/{repo_slug}"),
+    ]
+    assert request.call_args.kwargs["json"] == {"template_type": "organizational"}
+
+
+@pytest.mark.parametrize("status", [HTTPStatus.BAD_REQUEST, HTTPStatus.CONFLICT])
+@pytest.mark.parametrize("lookup_status", [HTTPStatus.NOT_FOUND, HTTPStatus.FORBIDDEN, HTTPStatus.SERVICE_UNAVAILABLE])
+def test_unavailable_slug_is_not_reused_without_existing_repo(
+    sourcecraft_api: SourceCraftApi, status: int, lookup_status: int
+) -> None:
+    responses = [
+        httpx.Response(status, json={"error_code": "SlugIsNotAvailable", "message": "slug unavailable"}),
+        httpx.Response(lookup_status),
+    ]
+    with patch.object(sourcecraft_api, "_request", side_effect=responses) as request:
+        with pytest.raises(RmsApiException, match="SlugIsNotAvailable"):
+            sourcecraft_api.create_public_repo("unused", "unavailable-public")
+    assert [call.args[0] for call in request.call_args_list] == ["POST", "GET"]
+
+
+@pytest.mark.parametrize(
+    ("status", "error_code"),
+    [
+        (HTTPStatus.BAD_REQUEST, "InvalidArgument"),
+        (HTTPStatus.CONFLICT, "OtherConflict"),
+        (HTTPStatus.INTERNAL_SERVER_ERROR, "SlugIsNotAvailable"),
+    ],
+)
+def test_other_creation_errors_are_not_treated_as_existing_repositories(
+    sourcecraft_api: SourceCraftApi, status: int, error_code: str
+) -> None:
+    response = httpx.Response(status, json={"error_code": error_code})
+    with patch.object(sourcecraft_api, "_request", return_value=response) as request:
+        with pytest.raises(RmsApiException, match=error_code):
+            sourcecraft_api.create_public_repo("unused", "failed-public")
+    request.assert_called_once()

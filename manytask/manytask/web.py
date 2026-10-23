@@ -696,7 +696,11 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
 
         # Compute full path for course group from public repo path
         # e.g., "hse4-namespace/hse4-this-is-hell-3/public-2025-fall" -> "hse4-namespace/hse4-this-is-hell-3"
-        gitlab_course_group_full_path = "/".join(gitlab_course_public_repo.split("/")[:-1])
+        gitlab_course_group_full_path = (
+            gitlab_course_group
+            if app.app_config.rms == "sourcecraft"
+            else "/".join(gitlab_course_public_repo.split("/")[:-1])
+        )
 
         conflict = get_course_creation_conflict(app.storage_api, course_name, gitlab_course_group_full_path)
         if conflict is not None:
@@ -728,11 +732,11 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             logger.info("Created students group")
 
         except Exception as e:
-            logger.error("Failed to create GitLab resources: %s", str(e), exc_info=True)
+            logger.error("Failed to create repository resources: %s", str(e), exc_info=True)
             return render_template(
                 app.create_course_template,
                 generated_token=generate_token_hex(24),
-                error_message=f"Failed to create GitLab resources: {str(e)}",
+                error_message=f"Failed to create repository resources: {str(e)}",
                 rms=app.app_config.rms,
                 labels=app.create_course_labels,
             )
