@@ -49,6 +49,14 @@ from pydantic import BaseModel
 from .course import DEFAULT_TIMEZONE, Course, CourseStatus, get_current_time
 from .main import CustomFlask
 from .models import ROLE_PROGRAM_MANAGER
+from .namespace_membership import (
+    AssignmentFailure,
+    NamespaceGroup,
+    NamespaceMembership,
+    NamespaceRoleAssignment,
+    NamespaceRoleError,
+    add_namespace_role,
+)
 from .utils.database import get_database_table_data
 from .utils.generic import (
     calculate_percent,
@@ -81,75 +89,30 @@ def _get_stored_user_or_not_found(storage_api: StorageApi, rms_id: str) -> Store
 def _add_namespace_role(
     *,
     namespace_id: int,
-    namespace: Any,
+    namespace: NamespaceGroup,
     username: str,
     role: str,
     assigned_by_username: str,
-) -> tuple[Any, ResponseReturnValue | None]:
-    """Give a user a role in a namespace, in the database and in the RMS group.
-
-    Shared by the namespace users endpoint and the course access table, so both
-    paths perform exactly the same two steps in the same order and cannot drift.
-
-    :param namespace_id: id of the target namespace
-    :param namespace: the namespace object (needs ``gitlab_group_id``)
-    :param username: manytask username of the user to add
-    :param role: 'namespace_admin' or 'program_manager'
-    :param assigned_by_username: manytask username of the acting admin
-    :return: tuple of (user_on_namespace, error_response); exactly one is not None
-    """
+) -> tuple[NamespaceMembership | None, ResponseReturnValue | None]:
+    """Translate the shared membership operation's outcomes into API responses."""
     app: CustomFlask = current_app  # type: ignore
-    storage_api = app.storage_api
-    rms_api = app.rms_api
-
+    assignment = NamespaceRoleAssignment(
+        namespace_id=namespace_id,
+        gitlab_group_id=namespace.gitlab_group_id,
+        username=username,
+        role=role,
+        assigned_by_username=assigned_by_username,
+    )
     try:
-        user_on_namespace = storage_api.add_user_to_namespace(
-            namespace_id=namespace_id,
-            username=username,
-            role=role,
-            assigned_by_username=assigned_by_username,
-        )
-    except NoResultFound as e:
-        logger.warning("User %s not registered in manytask: %s", sanitize_log_data(username), str(e))
-        return None, (
-            jsonify(
-                ErrorResponse(
-                    error=f"User {username} is not registered in manytask. The user must log in at least once."
-                ).model_dump()
-            ),
-            HTTPStatus.NOT_FOUND,
-        )
-    except IntegrityError:
-        logger.warning("User %s already has a role in namespace id=%s", sanitize_log_data(username), namespace_id)
-        return None, (
-            jsonify(ErrorResponse(error="User already has a role in this namespace").model_dump()),
-            HTTPStatus.CONFLICT,
-        )
-    except ValueError as e:
-        logger.error("Invalid role %s: %s", role, str(e))
-        return None, (jsonify(ErrorResponse(error=str(e)).model_dump()), HTTPStatus.BAD_REQUEST)
-
-    # The RMS group membership is added only after the database row exists.
-    # TODO: откатить добавление в локальную БД, если добавление в группу RMS не удалось
-    try:
-        stored_user = storage_api.get_stored_user_by_username(username)
-        rms_api.add_user_to_namespace_group(
-            gitlab_group_id=namespace.gitlab_group_id,
-            rms_id=stored_user.rms_id,
-        )
-        logger.info(
-            "Added RMS user id=%s to group id=%s",
-            stored_user.rms_id,
-            namespace.gitlab_group_id,
-        )
-    except Exception as e:
-        logger.error("Failed to add user %s to RMS group: %s", sanitize_log_data(username), str(e))
-        return None, (
-            jsonify(ErrorResponse(error="Failed to add user to GitLab group").model_dump()),
-            HTTPStatus.INTERNAL_SERVER_ERROR,
-        )
-
-    return user_on_namespace, None
+        return add_namespace_role(app.storage_api, app.rms_api, assignment), None
+    except NamespaceRoleError as error:
+        statuses = {
+            AssignmentFailure.NOT_FOUND: HTTPStatus.NOT_FOUND,
+            AssignmentFailure.CONFLICT: HTTPStatus.CONFLICT,
+            AssignmentFailure.INVALID_ROLE: HTTPStatus.BAD_REQUEST,
+            AssignmentFailure.RMS_FAILED: HTTPStatus.INTERNAL_SERVER_ERROR,
+        }
+        return None, (jsonify(ErrorResponse(error=str(error)).model_dump()), statuses[error.kind])
 
 
 def _check_course_admin_access(course_name: str) -> ResponseReturnValue | None:
@@ -1179,6 +1142,7 @@ def add_user_to_namespace(
             role,
         )
 
+        assert user_on_namespace is not None
         response = UserOnNamespaceResponse(
             id=user_on_namespace.id,
             user_id=user_on_namespace.user_id,
@@ -1964,6 +1928,7 @@ def assign_program_manager(course_name: str, validated_data: AssignProgramManage
         sanitize_log_data(course_name),
     )
 
+    assert user_on_namespace is not None
     response = UserOnNamespaceResponse(
         id=user_on_namespace.id,
         user_id=user_on_namespace.user_id,
