@@ -1,6 +1,7 @@
 import logging
 import secrets
 from http import HTTPStatus
+from typing import Sequence
 from urllib.parse import urlparse
 
 import gitlab
@@ -32,6 +33,7 @@ from .auth import (
 from .course import Course, CourseConfig, CourseStatus, get_current_time
 from .database import UNBOUND_INSTANCE_ADMIN_AUTH_ID, UNBOUND_INSTANCE_ADMIN_RMS_ID, UserIdentityConflictError
 from .main import CustomFlask
+from .namespaces import Namespace
 from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
     check_course_creation_namespace_permission,
@@ -141,12 +143,13 @@ def index() -> ResponseReturnValue:
 
 def _get_admin_namespaces(app: CustomFlask, username: str, is_instance_admin: bool) -> list[dict[str, str | int]]:
     """Build namespace table data visible to the current administrator."""
+    namespaces_with_roles: Sequence[tuple[Namespace, str]]
     if is_instance_admin:
         namespaces_with_roles = [(namespace, "instance_admin") for namespace in app.storage_api.get_all_namespaces()]
     else:
         namespaces_with_roles = app.storage_api.get_user_namespaces(username)
 
-    namespace_data = []
+    namespace_data: list[dict[str, str | int]] = []
     for namespace, role in namespaces_with_roles:
         if role not in ("instance_admin", "namespace_admin"):
             continue

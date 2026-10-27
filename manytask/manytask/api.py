@@ -49,6 +49,7 @@ from pydantic import BaseModel
 from .course import DEFAULT_TIMEZONE, Course, CourseStatus, get_current_time
 from .main import CustomFlask
 from .models import ROLE_PROGRAM_MANAGER
+from .namespaces import Namespace, NamespaceMembership
 from .utils.database import get_database_table_data
 from .utils.generic import (
     calculate_percent,
@@ -81,11 +82,11 @@ def _get_stored_user_or_not_found(storage_api: StorageApi, rms_id: str) -> Store
 def _add_namespace_role(
     *,
     namespace_id: int,
-    namespace: Any,
+    namespace: Namespace,
     username: str,
     role: str,
     assigned_by_username: str,
-) -> tuple[Any, ResponseReturnValue | None]:
+) -> tuple[NamespaceMembership | None, ResponseReturnValue | None]:
     """Give a user a role in a namespace, in the database and in the RMS group.
 
     Shared by the namespace users endpoint and the course access table, so both
@@ -1106,7 +1107,9 @@ def get_namespace_by_id(namespace_id: int) -> ResponseReturnValue:
 @requires_auth
 @requires_json_validation(UpdateNamespaceRequest)
 @requires_namespace_admin(return_404_if_not_found=True)
-def update_namespace(namespace_id: int, namespace: Any, validated_data: UpdateNamespaceRequest) -> ResponseReturnValue:
+def update_namespace(
+    namespace_id: int, namespace: Namespace, validated_data: UpdateNamespaceRequest
+) -> ResponseReturnValue:
     """Update namespace details as an instance admin or an admin of this namespace."""
     app: CustomFlask = current_app  # type: ignore
 
@@ -1126,7 +1129,7 @@ def update_namespace(namespace_id: int, namespace: Any, validated_data: UpdateNa
 @requires_json_validation(AddUserToNamespaceRequest)
 @requires_namespace_admin(return_404_if_not_found=True)
 def add_user_to_namespace(
-    namespace_id: int, namespace: Any, validated_data: AddUserToNamespaceRequest
+    namespace_id: int, namespace: Namespace, validated_data: AddUserToNamespaceRequest
 ) -> ResponseReturnValue:
     """Add a user to a namespace with a specific role.
 
@@ -1179,6 +1182,7 @@ def add_user_to_namespace(
             role,
         )
 
+        assert user_on_namespace is not None
         response = UserOnNamespaceResponse(
             id=user_on_namespace.id,
             user_id=user_on_namespace.user_id,
@@ -1201,7 +1205,7 @@ def add_user_to_namespace(
 @namespace_bp.get("/namespaces/<int:namespace_id>/users")
 @requires_auth
 @requires_namespace_admin()
-def get_namespace_users(namespace_id: int, namespace: Any) -> ResponseReturnValue:
+def get_namespace_users(namespace_id: int, namespace: Namespace) -> ResponseReturnValue:
     """Get list of users in a namespace with their roles.
 
     Only Instance Admin or Namespace Admin can view users.
@@ -1240,7 +1244,7 @@ def get_namespace_users(namespace_id: int, namespace: Any) -> ResponseReturnValu
 @namespace_bp.delete("/namespaces/<int:namespace_id>/users/<int:user_id>")
 @requires_auth
 @requires_namespace_admin()
-def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) -> ResponseReturnValue:
+def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Namespace) -> ResponseReturnValue:
     """Remove a user from a namespace.
 
     Only Instance Admin or Namespace Admin can remove users.
@@ -1318,7 +1322,7 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
 @requires_json_validation(UpdateUserRoleRequest)
 @requires_namespace_admin()
 def update_user_role_in_namespace(
-    namespace_id: int, user_id: int, namespace: Any, validated_data: UpdateUserRoleRequest
+    namespace_id: int, user_id: int, namespace: Namespace, validated_data: UpdateUserRoleRequest
 ) -> ResponseReturnValue:
     """Update a user's role in a namespace.
 
@@ -1964,6 +1968,7 @@ def assign_program_manager(course_name: str, validated_data: AssignProgramManage
         sanitize_log_data(course_name),
     )
 
+    assert user_on_namespace is not None
     response = UserOnNamespaceResponse(
         id=user_on_namespace.id,
         user_id=user_on_namespace.user_id,

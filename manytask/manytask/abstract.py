@@ -1,12 +1,13 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Sequence
 
 from authlib.integrations.flask_client import OAuth
 
 from .config import ManytaskConfig, ManytaskFinalGradeConfig, ManytaskGroupConfig, ManytaskTaskConfig
 from .course import Course, CourseConfig, CourseStatus, ProtectedBranchSettings
+from .namespaces import Namespace, NamespaceMembership
 
 
 @dataclass
@@ -282,19 +283,19 @@ class StorageApi(ABC):
         description: str | None,
         gitlab_group_id: int,
         created_by_username: str,
-    ) -> Any: ...
+    ) -> Namespace: ...
 
     @abstractmethod
-    def get_all_namespaces(self) -> list[Any]: ...
+    def get_all_namespaces(self) -> Sequence[Namespace]: ...
 
     @abstractmethod
-    def get_user_namespaces(self, username: str) -> list[tuple[Any, str]]: ...
+    def get_user_namespaces(self, username: str) -> Sequence[tuple[Namespace, str]]: ...
 
     @abstractmethod
-    def get_namespace_by_id(self, namespace_id: int, username: str) -> tuple[Any, str | None]: ...
+    def get_namespace_by_id(self, namespace_id: int, username: str) -> tuple[Namespace, str | None]: ...
 
     @abstractmethod
-    def update_namespace(self, namespace_id: int, name: str, description: str | None) -> Any: ...
+    def update_namespace(self, namespace_id: int, name: str, description: str | None) -> Namespace: ...
 
     @abstractmethod
     def add_user_to_namespace(
@@ -303,7 +304,7 @@ class StorageApi(ABC):
         username: str,
         role: str,
         assigned_by_username: str,
-    ) -> Any: ...
+    ) -> NamespaceMembership: ...
 
     @abstractmethod
     def get_namespace_users(self, namespace_id: int) -> list[tuple[int, str]]: ...

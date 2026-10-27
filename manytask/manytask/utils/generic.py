@@ -12,6 +12,8 @@ from requests import Response
 from requests.exceptions import HTTPError
 from sqlalchemy.exc import NoResultFound
 
+from manytask.namespaces import Namespace, NamespaceLookup
+
 logger = logging.getLogger(__name__)
 
 
@@ -75,11 +77,11 @@ def sanitize_and_validate_comment(comment: str | None, max_length: int = 1000) -
 
 
 def check_course_creation_namespace_permission(
-    storage_api: Any,
+    storage_api: NamespaceLookup,
     namespace_id: int,
     username: str,
     is_instance_admin: bool,
-) -> tuple[Any, str | None, str | None, int | None]:
+) -> tuple[Namespace | None, str | None, str | None, int | None]:
     namespace = None
     role = None
     if namespace_id == 0:
