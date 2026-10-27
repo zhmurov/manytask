@@ -1,7 +1,7 @@
 from typing import Any
 
 from manytask.course import Course
-from manytask.database import calculate_effective_grade
+from manytask.grading import calculate_effective_grade
 from manytask.main import CustomFlask
 from manytask.utils.generic import calculate_percent
 
