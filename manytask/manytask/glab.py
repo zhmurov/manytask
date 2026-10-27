@@ -15,7 +15,7 @@ from gitlab.exceptions import GitlabAuthenticationError, GitlabCreateError, Gitl
 
 from .abstract import AuthApi, AuthenticatedUser, RmsApi, RmsApiException, RmsUser
 from .course import ProtectedBranchSettings
-from .utils.generic import check_oauth_authenticated
+from .oauth import check_oauth_authenticated
 
 logger = logging.getLogger(__name__)
 

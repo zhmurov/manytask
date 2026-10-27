@@ -10,7 +10,7 @@ from authlib.integrations.flask_client import OAuth
 from requests.exceptions import HTTPError
 
 from .abstract import AuthApi, AuthenticatedUser
-from .utils.generic import check_oauth_authenticated
+from .oauth import check_oauth_authenticated
 
 logger = logging.getLogger(__name__)
 

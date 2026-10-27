@@ -12,6 +12,7 @@ from sqlalchemy.exc import NoResultFound
 from wtforms import ValidationError
 
 from manytask.abstract import RmsApiException, RmsUser, StoredUser
+from manytask.course_creation import check_course_creation_namespace_permission
 
 from .abstract import ClientProfile
 from .auth import (
@@ -34,7 +35,6 @@ from .database import UNBOUND_INSTANCE_ADMIN_AUTH_ID, UNBOUND_INSTANCE_ADMIN_RMS
 from .main import CustomFlask
 from .utils.flask import check_if_current_user_is_instance_admin, get_courses, has_role
 from .utils.generic import (
-    check_course_creation_namespace_permission,
     generate_token_hex,
     sanitize_log_data,
     validate_name,
@@ -676,17 +676,19 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         username = session["manytask"]["username"]
         is_instance_admin = check_if_current_user_is_instance_admin(app)
 
-        namespace, role, error, _ = check_course_creation_namespace_permission(
+        permission = check_course_creation_namespace_permission(
             app.storage_api, namespace_id, username, is_instance_admin
         )
-        if error is not None:
+        if permission.error is not None:
             return render_template(
                 app.create_course_template,
                 generated_token=generate_token_hex(24),
-                error_message=error,
+                error_message=permission.error,
                 rms=app.app_config.rms,
                 labels=app.create_course_labels,
             )
+
+        namespace = permission.namespace
 
         course_name = request.form["unique_course_name"].strip()
         gitlab_course_group = request.form["course_group"].strip()

@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
 from manytask.abstract import RmsApiException, StorageApi, StoredUser
+from manytask.course_creation import check_course_creation_namespace_permission
 from manytask.database import TaskDisabledError
 
 from .abstract import RmsApi, RmsUser
@@ -52,7 +53,6 @@ from .models import ROLE_PROGRAM_MANAGER
 from .utils.database import get_database_table_data
 from .utils.generic import (
     calculate_percent,
-    check_course_creation_namespace_permission,
     sanitize_and_validate_comment,
     sanitize_log_data,
 )
@@ -1474,12 +1474,11 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
     try:
         is_instance_admin = storage_api.check_if_instance_admin(username)
 
-        namespace, role, error, error_status = check_course_creation_namespace_permission(
-            storage_api, namespace_id, username, is_instance_admin
-        )
-        if error is not None:
-            assert error_status is not None
-            return jsonify(ErrorResponse(error=error).model_dump()), error_status
+        permission = check_course_creation_namespace_permission(storage_api, namespace_id, username, is_instance_admin)
+        if permission.error is not None:
+            assert permission.status is not None
+            return jsonify(ErrorResponse(error=permission.error).model_dump()), permission.status
+        namespace, role = permission.namespace, permission.role
 
         if namespace_id == 0 and owner_rms_ids:
             return jsonify(
