@@ -1,33 +1,13 @@
 from flask import session, url_for
 
-from manytask.course import CourseStatus
+from manytask import access
 from manytask.main import CustomFlask
 
 
 def get_courses(app: CustomFlask) -> list[dict[str, str | bool]]:
     username = "guest" if app.debug else session["manytask"]["username"]
-    if app.debug or app.storage_api.check_if_instance_admin(username):
-        courses_names = app.storage_api.get_all_courses_names_with_statuses()
-        """
-        Keeping the logic below for now, but this should be changed since namespace admin should see:
-        - Courses from their namespaces
-        - Courses they are registered to (not necessarily from their owned namespaces)
-        """
-    elif check_if_user_has_namespaces_to_admin(app):
-        namespace_admin_namespaces = app.storage_api.get_namespace_admin_namespaces(username)
-        namespace_courses = app.storage_api.get_courses_by_namespace_ids(namespace_admin_namespaces)
-        course_admin_courses = app.storage_api.get_courses_where_course_admin(username)
-
-        courses_dict = {name: status for name, status in namespace_courses}
-        for name, status in course_admin_courses:
-            if name not in courses_dict:
-                courses_dict[name] = status
-
-        courses_names = list[tuple[str, CourseStatus]](courses_dict.items())
-    else:
-        courses_names = app.storage_api.get_user_courses_names_with_statuses(username)
-
     is_instance_admin = app.debug or app.storage_api.check_if_instance_admin(username)
+    courses_names = access.get_visible_courses(app.storage_api, username, is_instance_admin=is_instance_admin)
 
     courses_list = []
     for course_name, status in courses_names:
@@ -72,27 +52,13 @@ def can_edit_course(
     namespace_id: int | None,
     namespace_role: str | None,
 ) -> bool:
-    """Decide whether the current user may edit a course's settings.
-
-    Pure decision function that mirrors the authorization enforced by the
-    :func:`manytask.web.edit_course` route, so the Edit control shown in the UI
-    never links to a page that would return HTTP 403. Being a *course* admin is
-    intentionally not sufficient: a non-instance-admin may edit only a course
-    that belongs to a namespace where they are a *namespace admin*.
-
-    :param app: Flask application instance (debug mode grants edit access)
-    :param is_instance_admin: whether the current user is an instance admin
-    :param namespace_id: id of the course's namespace, or ``None``
-    :param namespace_role: the user's role in that namespace, as returned by
-        :meth:`StorageApi.get_namespace_by_id` (``None`` for instance admins or
-        no access)
-    :return: True if the user may edit the course
-    """
-    if app.debug:
-        return True
-    if is_instance_admin:
-        return True
-    return bool(namespace_id) and namespace_role == "namespace_admin"
+    """Adapt the explicit course-edit policy to the current Flask application."""
+    return access.can_edit_course(
+        debug=app.debug,
+        is_instance_admin=is_instance_admin,
+        namespace_id=namespace_id,
+        namespace_role=namespace_role,
+    )
 
 
 def check_if_current_user_is_instance_admin(app: CustomFlask) -> bool:
@@ -127,8 +93,7 @@ def check_if_user_has_namespaces_to_admin(app: CustomFlask) -> bool:
         return True
     else:
         username = session["manytask"]["username"]
-        namespace_admin_namespaces = app.storage_api.get_namespace_admin_namespaces(username)
-        return len(namespace_admin_namespaces) > 0 or app.storage_api.check_if_instance_admin(username)
+        return access.can_create_courses(app.storage_api, username)
 
 
 def has_role(
@@ -147,23 +112,4 @@ def has_role(
     :param namespace_id: Optional namespace id for namespace-specific roles
     :return: True if user has at least one of the required roles
     """
-    required = {required_roles} if isinstance(required_roles, str) else set(required_roles)
-
-    if course_name:
-        access_user = next(
-            (user for user in app.storage_api.get_course_access_users(course_name) if user.username == username),
-            None,
-        )
-        if "student" in required or (access_user is not None and required.intersection(access_user.access_levels)):
-            return True
-    elif "instance_admin" in required and app.storage_api.check_if_instance_admin(username):
-        return True
-
-    if namespace_id is not None and "namespace_admin" in required:
-        try:
-            _, namespace_role = app.storage_api.get_namespace_by_id(namespace_id, username)
-        except PermissionError:
-            namespace_role = None
-        return namespace_role == "namespace_admin"
-
-    return False
+    return access.has_role(username, required_roles, app.storage_api, course_name, namespace_id)
