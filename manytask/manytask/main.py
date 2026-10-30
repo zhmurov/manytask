@@ -18,6 +18,7 @@ from manytask.mock_auth import MockAuthApi
 from manytask.mock_rms import MockRmsApi
 
 from . import abstract, config, course, database, glab, local_config, sourcecraft, yandex_id
+from .errors import register_error_handlers
 from .utils.rms_settings import schedule_rms_settings_reconcile
 
 MAX_AGE_IN_SECONDS = 86400
@@ -110,6 +111,7 @@ def _load_common_example_course_yaml() -> dict[str, Any]:
 
 def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
     app = CustomFlask(__name__)
+    register_error_handlers(app)
 
     if debug:
         app.debug = debug

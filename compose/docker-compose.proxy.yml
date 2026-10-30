@@ -40,6 +40,9 @@ services:
       - vhost:/etc/nginx/vhost.d
       - html:/usr/share/nginx/html
       - conf:/etc/nginx/conf.d
+      # Static and self-contained: survives an unavailable or stopped app container.
+      - ../manytask/manytask/static/errors/50x.html:/usr/share/nginx/html/errors/50x.html:ro
+      - ./errors/default.conf:/etc/nginx/vhost.d/default:ro
       - /var/run/docker.sock:/tmp/docker.sock:ro
     networks:
       - manytask-net
