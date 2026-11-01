@@ -3,7 +3,7 @@ FROM node:24 AS docs_builder
 RUN npm i @diplodoc/cli -g
 
 COPY . ./docs
-RUN yfm -i ./docs -o ./html --allow-custom-resources
+RUN node ./docs/scripts/build-docs.mjs ./html
 
 
 FROM nginx AS docs

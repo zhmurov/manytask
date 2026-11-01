@@ -38,6 +38,9 @@ jobs:
           build-root: './build'
           lint-root: './html'
 
+      - name: Build standalone landing page
+        run: node docs/scripts/build-landing.mjs ./html
+
   # Deploy job runs only on push to main or manual trigger
   deploy:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -56,6 +59,8 @@ jobs:
           src-root: './docs'
           build-root: './build'
           lint-root: './html'
+      - name: Build standalone landing page
+        run: node docs/scripts/build-landing.mjs ./html
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:

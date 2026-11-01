@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Run programming courses with Manytask. Automate testing, manage student repositories, and keep scores and deadlines together. Integrates with GitLab and SourceCraft.">
+  <meta name="theme-color" content="#fffdf8">
+  <meta property="og:title" content="Manytask — Less routine. More teaching.">
+  <meta property="og:description" content="Your programming course, from the first git push to the final score. Open source, with GitLab and SourceCraft integrations.">
+  <meta property="og:type" content="website">
+  <title>Manytask — Less routine. More teaching.</title>
+  <link rel="icon" href="img/favicon.ico">
+  <link rel="preload" href="landing-assets/fonts/NunitoSans-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="landing-assets/fonts/NunitoSans-SemiBold.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="landing-assets/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header wrap">
+    <a class="brand" href="./" aria-label="Manytask home"><img src="landing-assets/logo.svg" alt="Manytask" width="184" height="32"></a>
+    <nav aria-label="Main navigation">
+      <a href="#how-it-works">How it works</a>
+      <a href="about.html">Documentation</a>
+      <a href="https://github.com/manytask/manytask">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+    <a class="button button-small" href="https://app.manytask.org/">Open app <span aria-hidden="true">↗</span></a>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="tiny-mark" aria-hidden="true"></span> Open source. Made for teaching.</p>
+        <h1 id="hero-title">Less routine.<br><span class="underline">More teaching.</span></h1>
+        <p class="hero-description">A programming course has a lot of moving parts. Bring repositories, automated tests, scores, and deadlines together with Manytask.</p>
+        <div class="actions">
+          <a class="button" href="https://app.manytask.org/">Open Manytask <span aria-hidden="true">↗</span></a>
+          <a class="button button-outline" href="basic_example.html">Set up a course <span aria-hidden="true">→</span></a>
+        </div>
+        <p class="hero-note">Built around Git. Ready for your way of teaching.</p>
+      </div>
+      <figure class="hero-art">
+        <img src="landing-assets/mascot-homework.jpg" alt="The Manytask mascot waving beside a laptop with a new assignment." width="1024" height="1024" fetchpriority="high">
+        <figcaption>A little less admin. A lot more learning.</figcaption>
+      </figure>
+    </section>
+
+    <div class="integration-strip wrap">
+      <p>Your repositories.<br> Your choice.</p>
+      <a href="#integrations">GitLab</a>
+      <span class="strip-plus" aria-hidden="true">+</span>
+      <a href="#integrations">SourceCraft</a>
+      <span class="strip-note">Real tools.<br>Real programming practice.</span>
+    </div>
+
+    <section class="section wrap workflow" id="how-it-works" aria-labelledby="workflow-title">
+      <div class="section-heading">
+        <p class="eyebrow">From assignment to achievement</p>
+        <h2 id="workflow-title">One course.<br>A connected workflow.</h2>
+        <p>Keep the familiar cycle of writing code, pushing changes, and getting feedback. Let the course machinery do the repetitive work.</p>
+      </div>
+      <div class="workflow-layout">
+        <ol class="steps">
+          <li>
+            <span class="step-number">01</span>
+            <div><h3>Prepare once. Publish with Git.</h3><p>Keep tasks, solution templates, tests, and course settings under version control. Export the parts students need.</p><a class="text-link" href="course_as_code.html">Explore course as code <span aria-hidden="true">→</span></a></div>
+          </li>
+          <li>
+            <span class="step-number">02</span>
+            <div><h3>Students push. Your tests run.</h3><p>Manytask creates personal repositories. Your CI runs the checker against submissions and sends the results back.</p><a class="text-link" href="checker_config.html">Meet the checker <span aria-hidden="true">→</span></a></div>
+          </li>
+          <li>
+            <span class="step-number">03</span>
+            <div><h3>Everyone knows where they stand.</h3><p>Students see their scores and deadlines. Teachers follow progress and manage grades in one place.</p><a class="text-link" href="using_manytask.html">See the student workflow <span aria-hidden="true">→</span></a></div>
+          </li>
+        </ol>
+        <div class="course-example" aria-label="Illustrative example of the submission and scoring workflow">
+          <div class="terminal">
+            <div class="terminal-heading"><span class="terminal-dots" aria-hidden="true">● ● ●</span><span>student / hello-world</span></div>
+            <p><span class="terminal-prompt">$</span> git push</p>
+            <p class="terminal-muted">Running course checks…</p>
+            <p><span class="terminal-success">✓ Tests passed</span></p>
+            <p class="terminal-muted">Score reported to Manytask.</p>
+          </div>
+          <div class="scoreboard">
+            <div class="scoreboard-heading"><div><p class="eyebrow">Your course</p><h3>Programming 101</h3></div><span class="example-label">Example</span></div>
+            <table>
+              <caption class="visually-hidden">Illustrative scores, not live student data</caption>
+              <thead><tr><th scope="col">Assignment</th><th scope="col">Status</th><th scope="col">Score</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">Hello, world</th><td><span class="task-status passed">Passed</span></td><td>10 / 10</td></tr>
+                <tr><th scope="row">First algorithm</th><td><span class="task-status passed">Passed</span></td><td>20 / 20</td></tr>
+                <tr><th scope="row">A new challenge</th><td><span class="task-status">To do</span></td><td>0 / 20</td></tr>
+              </tbody>
+            </table>
+            <div class="progress-heading"><span>A little further every push.</span><strong>30 / 50</strong></div>
+            <progress value="30" max="50" aria-label="Example course score: 30 out of 50">60%</progress>
+          </div>
+          <p class="example-note">An example of the flow. Your course sets the tasks and scoring rules.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="integration-section" id="integrations" aria-labelledby="integration-title">
+      <div class="wrap integration-content">
+        <div class="integration-intro"><p class="eyebrow">Fits into your toolkit</p><h2 id="integration-title">Good courses.<br>More than one home.</h2><p>Manytask integrates with GitLab and SourceCraft to connect course repositories with student access and progress.</p><a class="text-link" href="concepts.html">Understand the building blocks <span aria-hidden="true">→</span></a></div>
+        <div class="platforms">
+          <article class="platform"><div class="platform-title"><span class="platform-symbol gitlab-symbol" aria-hidden="true">G</span><h3>GitLab</h3></div><p>Use GitLab repositories and CI for your course. Manytask provisions student repositories and connects them to your scoring workflow.</p><span class="platform-detail">Git repositories · CI pipelines</span></article>
+          <article class="platform"><div class="platform-title"><span class="platform-symbol sourcecraft-symbol" aria-hidden="true">S</span><h3>SourceCraft</h3></div><p>Host course repositories in SourceCraft. Students sign in with Yandex ID, and Manytask creates their repositories from your course template and grants access.</p><span class="platform-detail">Yandex ID · Template-based repositories</span></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section wrap capabilities" aria-labelledby="capabilities-title">
+      <div class="section-heading split-heading"><div><p class="eyebrow">Your course, your rules</p><h2 id="capabilities-title">Keep the parts<br>that make it yours.</h2></div><p>Manytask coordinates the course. You choose what to teach, how to test it, and what progress means.</p></div>
+      <div class="feature-grid">
+        <article><span class="feature-marker marker-square" aria-hidden="true"></span><h3>Bring your language.</h3><p>Python, C++, or something else: run your own tools in a course-specific test environment. Configure the checker around your assignments.</p><a class="text-link" href="checker_pipelines_and_plugins.html">Checker pipelines <span aria-hidden="true">→</span></a></article>
+        <article><span class="feature-marker marker-circle" aria-hidden="true"></span><h3>Share tasks. Keep solutions.</h3><p>Maintain a private teaching repository with reference solutions and tests. Publish selected files and starter code to the student-facing repository.</p><a class="text-link" href="private_repo.html">Repository structure <span aria-hidden="true">→</span></a></article>
+        <article><span class="feature-marker marker-arch" aria-hidden="true"></span><h3>Make deadlines work for you.</h3><p>Define task groups, deadlines, points, and late-submission rules in your course configuration. Keep the policy alongside the code.</p><a class="text-link" href="manytask_yml_reference.html">Course configuration <span aria-hidden="true">→</span></a></article>
+        <article><span class="feature-marker marker-triangle" aria-hidden="true"></span><h3>Start with a working example.</h3><p>Use the reference course template as a starting point. Add assignments, adapt the pipelines, and build from there.</p><a class="text-link" href="course_template.html">Course template <span aria-hidden="true">→</span></a></article>
+      </div>
+    </section>
+
+    <section class="section wrap questions" aria-labelledby="questions-title">
+      <div><p class="eyebrow">A few things to know</p><h2 id="questions-title">Before your<br>first assignment.</h2></div>
+      <div class="faq-list">
+        <details><summary>I'm a student. Where do I start?<span aria-hidden="true">+</span></summary><p>Open the Manytask instance and course link provided by your teacher. The <a href="using_manytask.html">student guide</a> explains registration, repositories, submissions, and scores.</p></details>
+        <details><summary>Can I use Manytask for a language other than Python?<span aria-hidden="true">+</span></summary><p>Yes. Manytask stores scores and course settings independently of the programming language. The checker runs the tools you configure in your course environment. See <a href="checker_config.html">checker configuration</a>.</p></details>
+        <details><summary>Can we host it ourselves?<span aria-hidden="true">+</span></summary><p>Yes. Manytask is open source and can be deployed on your own infrastructure. The <a href="system_setup.html">setup guide</a> covers the services you need. SourceCraft and GitLab have different authentication and repository settings; see the <a href="https://github.com/manytask/manytask/tree/main/compose">deployment configurations</a>.</p></details>
+        <details><summary>How can I contribute?<span aria-hidden="true">+</span></summary><p>Explore the <a href="https://github.com/manytask/manytask">monorepo</a>, pick an <a href="https://github.com/manytask/manytask/issues">open issue</a>, or join the <a href="https://t.me/manytask_chat">community chat</a>. The web app, checker, course template, and documentation live together.</p></details>
+      </div>
+    </section>
+
+    <section class="closing-section" aria-labelledby="closing-title">
+      <div class="wrap closing-inner"><div><p class="eyebrow">Make something worth learning</p><h2 id="closing-title">Your next course<br>starts here.</h2><div class="actions"><a class="button button-dark" href="basic_example.html">Build your course <span aria-hidden="true">→</span></a><a class="text-link" href="https://t.me/manytask_chat">Talk to the community <span aria-hidden="true">↗</span></a></div></div><div class="ribbon-panel" aria-hidden="true"></div></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-top"><div><a class="brand" href="./" aria-label="Manytask home"><img src="landing-assets/logo-light.svg" alt="Manytask" width="184" height="32" loading="lazy"></a><p>Test students' solutions.<br>Make room for teaching.</p></div><nav aria-label="Footer navigation"><a href="about.html">Documentation</a><a href="https://github.com/manytask/manytask">Source code <span aria-hidden="true">↗</span></a><a href="https://t.me/manytask_chat">Community <span aria-hidden="true">↗</span></a><a href="dev.html">Contribute</a></nav></div>
+    <div class="wrap footer-bottom"><span>Open source. Built together.</span><a href="https://github.com/manytask/manytask/blob/main/LICENSE">MIT licensed</a></div>
+  </footer>
+</body>
+</html>
