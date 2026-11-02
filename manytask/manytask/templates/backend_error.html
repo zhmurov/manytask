@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
-    <title>Taking a sick day · Manytask</title>
+    <title>@@TITLE@@ · Manytask</title>
     <style>
         @font-face {
             font-family: "Nunito Sans";
@@ -30,7 +30,7 @@
         .page {
             min-height: 100vh;
             min-height: 100svh;
-            max-width: 1200px;
+            max-width: 1040px;
             margin: auto;
             padding: 32px 48px 24px;
             display: flex;
@@ -41,29 +41,19 @@
         main {
             flex: 1;
             display: grid;
-            grid-template-columns: 1fr 1.15fr;
+            grid-template-columns: 1fr 1fr;
             align-items: center;
-            gap: 24px;
+            gap: 40px;
             padding: 48px 0;
-        }
-        .status {
-            display: inline-block;
-            margin: 0 0 20px;
-            padding: 6px 12px;
-            border: 1px solid #e6d7bc;
-            border-radius: 8px;
-            background: #fff3de;
-            font-size: 14px;
-            font-weight: 600;
         }
         h1 {
             margin: 0 0 20px;
-            font-size: clamp(32px, 4vw, 48px);
+            font-size: clamp(30px, 3.5vw, 42px);
             font-weight: 600;
             letter-spacing: -0.025em;
             line-height: 1.17;
         }
-        .description { max-width: 400px; margin: 0; color: #52616c; }
+        .description { max-width: 380px; margin: 0; color: #52616c; }
         .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
         .button {
             display: inline-flex;
@@ -82,16 +72,13 @@
         .secondary { border-color: #ced4d7; background: transparent; }
         .secondary:hover { border-color: #52616c; background: #f2ede5; }
         a:focus-visible { outline: 3px solid #202b35; outline-offset: 5px; }
-        .hint { margin: 20px 0 0; color: #52616c; font-size: 14px; }
-        .illustration { display: block; width: 100%; height: auto; }
-        footer { color: #52616c; font-size: 14px; padding: 8px; }
+        .illustration { display: block; width: 100%; height: auto; max-height: 360px; object-fit: contain; }
         @media (max-width: 700px) {
             .page { padding: 20px 24px; }
             .brand img { width: 160px; }
-            main { grid-template-columns: 1fr; gap: 24px; padding: 36px 0 24px; }
-            .illustration { grid-row: 1; width: min(100%, 400px); margin: auto; }
+            main { grid-template-columns: 1fr; gap: 24px; padding: 24px 0; align-content: center; }
+            .illustration { grid-row: 1; width: min(100%, 300px); max-height: 230px; margin: auto; }
             .copy { max-width: 480px; margin: auto; width: 100%; }
-            .status { margin-bottom: 16px; }
             h1 { margin-bottom: 16px; }
         }
     </style>
@@ -105,22 +92,18 @@
         </header>
         <main>
             <div class="copy">
-                <p class="status">Temporarily unavailable</p>
-                <h1>Manytask is taking<br>a sick day.</h1>
-                <p class="description">Our mascot needs a little rest, and Manytask isn't feeling well either. Please try again in a few minutes.</p>
+                <h1>@@TITLE@@</h1>
+                <p class="description">@@DESCRIPTION@@</p>
                 <div class="actions">
                     <a class="button" href="" id="retry">Try again</a>
                     <a class="button secondary" href="/">Back to courses</a>
                 </div>
-                <p class="hint">If you were submitting a form, check whether it went through before sending it again.</p>
             </div>
-            <img class="illustration" src="@@MASCOT@@" alt="The Manytask mascot resting in bed under a blanket, holding a thermometer." width="1536" height="1024">
+            <img class="illustration" src="@@MASCOT@@" alt="@@ALT@@">
         </main>
-        <footer>A little rest. Then back to learning.</footer>
     </div>
     <script>
         // Navigate with GET, even when the failed request submitted a form.
-        // Avoid an empty fragment or protocol-relative path changing navigation.
         document.getElementById('retry').href = window.location.href;
     </script>
 </body>

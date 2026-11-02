@@ -1,0 +1,32 @@
+{
+  "50x": {
+    "title": "Manytask is unavailable",
+    "description": "This page couldn't be loaded. Please try again in a few minutes.",
+    "image": "mascot-disconnected.jpg",
+    "alt": "The Manytask mascot holding an unplugged network cable beside a router with an empty Ethernet socket."
+  },
+  "internal": {
+    "title": "Something went wrong in Manytask",
+    "description": "An internal error stopped this page from loading. Please try again later.",
+    "image": "mascot-sick.jpg",
+    "alt": "The Manytask mascot resting in bed under a blanket."
+  },
+  "unavailable": {
+    "title": "Manytask is unavailable",
+    "description": "The Manytask server couldn't handle this request. Please try again in a few minutes.",
+    "image": "mascot-disconnected.jpg",
+    "alt": "The Manytask mascot holding an unplugged network cable beside a router with an empty Ethernet socket."
+  },
+  "timeout": {
+    "title": "The request timed out",
+    "description": "The server didn't respond in time. Please try again in a few minutes.",
+    "image": "mascot-timeout.png",
+    "alt": "The Manytask mascot hurrying with an alarm clock."
+  },
+  "database": {
+    "title": "A database request failed",
+    "description": "Manytask couldn't read or update course data. Please try again later.",
+    "image": "mascot-disconnected.jpg",
+    "alt": "The Manytask mascot holding an unplugged network cable beside a router with an empty Ethernet socket."
+  }
+}

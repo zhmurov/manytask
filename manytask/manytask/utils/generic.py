@@ -124,6 +124,16 @@ def get_course_creation_conflict(storage_api: "StorageApi", course_name: str, co
     return None
 
 
+def _raise_for_auth_outage(error: HTTPError | OAuthError) -> None:
+    # A service outage must not be treated as an expired user session.
+    if (
+        isinstance(error, HTTPError)
+        and error.response is not None
+        and error.response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR
+    ):
+        raise error
+
+
 def check_oauth_authenticated(
     make_auth_request: Callable[[str], Response],
     refresh_token_fn: Callable[[], dict[str, Any] | None],
@@ -137,6 +147,7 @@ def check_oauth_authenticated(
         response.raise_for_status()
         return True
     except HTTPError as e:
+        _raise_for_auth_outage(e)
         if e.response.status_code == HTTPStatus.UNAUTHORIZED:
             try:
                 logger.info("%sAccess token expired. Trying to refresh token.", log_prefix)
@@ -155,7 +166,8 @@ def check_oauth_authenticated(
                 logger.info("%sToken refreshed successfully.", log_prefix)
 
                 return True
-            except (HTTPError, OAuthError):
+            except (HTTPError, OAuthError) as refresh_error:
+                _raise_for_auth_outage(refresh_error)
                 logger.error("Failed to refresh %stoken", log_prefix, exc_info=True)
                 return False
 
