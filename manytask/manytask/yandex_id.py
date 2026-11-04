@@ -46,7 +46,7 @@ class YandexIDApi(AuthApi):
             )
             return new_tokens
         except (HTTPError, OAuthError) as e:
-            logger.error(f"Failed to refresh Yandex token: {e}", exc_info=True)
+            logger.error("Failed to refresh YandexID token error=%s", e, exc_info=True)
             return None
 
     def check_user_is_authenticated(
@@ -88,7 +88,7 @@ class YandexIDApi(AuthApi):
                 id=user_id,
                 username=username,
             )
-            logger.info(f"Successfully retrieved YandexID user: {user}")
+            logger.info("Authenticated user fetched auth_id=%s user=%s", user.id, user.username)
 
             return user
 

@@ -219,7 +219,7 @@ def create_app(*, debug: bool | None = None, test: bool = False) -> CustomFlask:
 
     app.config["SEND_FILE_MAX_AGE_DEFAULT"] = MAX_AGE_IN_SECONDS
 
-    logger.info("Init success")
+    logger.info("Application initialized rms=%s debug=%s", rms, app.debug)
 
     return app
 
@@ -270,8 +270,10 @@ def _logging_config(app: CustomFlask) -> dict[str, Any]:
         "disable_existing_loggers": False,
         "formatters": {
             "default": {
+                "()": "manytask.utils.logging.ContextFormatter",
                 "format": "[%(asctime)s] [%(levelname)s] - "
-                "[process-%(process)d:%(thread)d] app in [%(module)s:%(lineno)s] : %(message)s",
+                "[process-%(process)d:%(thread)d] app in [%(module)s:%(lineno)s] : "
+                "%(message)s | %(request_context)s",
             },
             "access": {
                 "format": "[%(asctime)s] - %(message)s",

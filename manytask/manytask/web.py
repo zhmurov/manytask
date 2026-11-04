@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 import gitlab
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, session, url_for
 from flask.typing import ResponseReturnValue
 from flask_wtf.csrf import validate_csrf
 from sqlalchemy.exc import NoResultFound
@@ -88,7 +88,9 @@ def _store_signup_user(
             auth_id=auth_id,
         )
     except UserIdentityConflictError:
-        logger.warning("Registration conflicts with an existing Manytask identity")
+        logger.warning(
+            "Registration rejected reason=identity_conflict user=%s rms_id=%s auth_id=%s", username, rms_id, auth_id
+        )
         return False
     return True
 
@@ -188,14 +190,12 @@ def login_finish() -> ResponseReturnValue:
     app: CustomFlask = current_app  # type: ignore
     oauth: OAuth = app.oauth
 
-    result = handle_oauth_callback(oauth, app)
-    if "auth" in session:
-        logger.info("User %s successfully authenticated", session["auth"]["username"])
-    return result
+    return handle_oauth_callback(oauth, app)
 
 
 @root_bp.route("/logout")
 def logout() -> ResponseReturnValue:
+    logger.info("User logged out")
     session.pop("auth", None)
     session.pop("rms", None)
     session.pop("manytask", None)
@@ -287,7 +287,7 @@ def signup() -> ResponseReturnValue:
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError as e:
-        app.logger.error("CSRF validation failed: %s", e)
+        app.logger.error("CSRF validation failed error=%s", e)
         return render_template(
             app.signup_template,
             course_favicon=app.favicon,
@@ -334,7 +334,7 @@ def signup() -> ResponseReturnValue:
 
     # render template with error... if error
     except Exception as e:
-        logger.warning("User registration failed: %s", e)
+        logger.warning("User registration failed error=%s", e)
         return render_template(
             app.signup_template,
             error_message=MISSING_GITLAB_ACCOUNT_MESSAGE if isinstance(e, UserIdentityConflictError) else str(e),
@@ -353,7 +353,7 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         return redirect_to_login_with_bad_session()
 
     if valid_rms_session(session) and valid_manytask_session(session):
-        logger.warning("User already has username=%s in session", session["manytask"]["username"])
+        logger.warning("Signup skipped reason=existing_session user=%s", session["manytask"]["username"])
         return redirect(url_for("root.index"))
 
     stored_user_or_none: StoredUser | None = app.storage_api.get_stored_user_by_auth_id(
@@ -380,7 +380,7 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError as e:
-        app.logger.error("CSRF validation failed: %s", e)
+        app.logger.error("CSRF validation failed error=%s", e)
         return render_template(
             app.signup_template,
             course_favicon=app.favicon,
@@ -402,7 +402,7 @@ def signup_finish() -> ResponseReturnValue:  # noqa: PLR0911
         # TODO: we still expect that username is same in auth and rms, need to find a way to untangle them (issue #880)
         rms_user: RmsUser = app.rms_api.get_rms_user_by_username(session["auth"]["username"])
     except RmsApiException as e:
-        logger.error(f"Failed to get RMS user: {e}")
+        logger.error("Failed to fetch RMS user error=%s", e)
         if app.app_config.rms == "sourcecraft":
             return render_template(
                 app.signup_finish_template,
@@ -471,7 +471,7 @@ def create_project(course_name: str) -> ResponseReturnValue:
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError as e:
-        app.logger.error("CSRF validation failed: %s", e)
+        app.logger.error("CSRF validation failed error=%s", e)
         return render_create_project("CSRF Error")
 
     # Set user to be course admin if they provided course token as a secret
@@ -510,12 +510,12 @@ def _create_student_project(app: CustomFlask, course: Course) -> str | None:
             course.ci_config_path,
             course.protected_branches,
         )
-        logger.info("Successfully created project for user %s in course %s", rms_user.username, course.course_name)
+        logger.info("Student repository created user=%s course=%s", rms_user.username, course.course_name)
     except gitlab.GitlabError as ex:
-        logger.error("Project creation failed in course %s: %s", course.course_name, ex.error_message)
+        logger.error("Failed to create student repository course=%s error=%s", course.course_name, ex.error_message)
         return ex.error_message
     except RmsApiException as ex:
-        logger.error("Project creation failed in course %s: %s", course.course_name, ex)
+        logger.error("Failed to create student repository course=%s error=%s", course.course_name, ex)
         return (
             "Could not create your repository. This is not something you can fix yourself - "
             "please report it to the course staff."
@@ -545,7 +545,7 @@ def recover_project(course_name: str) -> ResponseReturnValue:
         try:
             validate_csrf(request.form.get("csrf_token"))
         except ValidationError as e:
-            app.logger.error("CSRF validation failed: %s", e)
+            app.logger.error("CSRF validation failed error=%s", e)
             error_message = "CSRF Error"
         else:
             error_message = _create_student_project(app, course)
@@ -649,7 +649,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         try:
             validate_csrf(request.form.get("csrf_token"))
         except ValidationError as e:
-            app.logger.error("CSRF validation failed: %s", e)
+            app.logger.error("CSRF validation failed error=%s", e)
             return render_template(
                 app.create_course_template,
                 generated_token=generate_token_hex(24),
@@ -695,6 +695,8 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             )
 
         course_name = request.form["unique_course_name"].strip()
+        g.log_course = course_name
+        g.log_namespace_id = namespace_id
         gitlab_course_group = request.form["course_group"].strip()
         gitlab_course_public_repo = request.form["course_public_repo"].strip()
         gitlab_course_students_group = request.form["course_students_group"].strip()
@@ -714,23 +716,21 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
             )
 
         try:
-            logger.info(
-                "Creating GitLab course group: %s (full path: %s)", gitlab_course_group, gitlab_course_group_full_path
-            )
+            logger.info("Creating course group group=%s path=%s", gitlab_course_group, gitlab_course_group_full_path)
             course_group_id = app.rms_api.create_course_group(
                 parent_group_id=namespace.gitlab_group_id if namespace else None,
                 course_name=course_name,
                 course_slug=gitlab_course_group.split("/")[-1] if "/" in gitlab_course_group else gitlab_course_group,
             )
-            logger.info("Created course group with id=%s", course_group_id)
+            logger.info("Course group created group_id=%s", course_group_id)
 
-            logger.info("Creating public repo: %s", gitlab_course_public_repo)
+            logger.info("Creating public repository repo=%s", gitlab_course_public_repo)
             app.rms_api.create_public_repo(gitlab_course_group_full_path, gitlab_course_public_repo)
-            logger.info("Created public repo")
+            logger.info("Public repository created repo=%s", gitlab_course_public_repo)
 
-            logger.info("Creating students group: %s", gitlab_course_students_group)
+            logger.info("Creating students group group=%s", gitlab_course_students_group)
             app.rms_api.create_students_group(gitlab_course_students_group, parent_group_id=course_group_id)
-            logger.info("Created students group")
+            logger.info("Students group created group=%s", gitlab_course_students_group)
 
         except Exception as e:
             logger.error("Failed to create GitLab resources: %s", str(e), exc_info=True)
@@ -755,7 +755,7 @@ def create_course() -> ResponseReturnValue:  # noqa: PLR0911
         )
 
         if app.storage_api.create_course(settings):
-            logger.info("Successfully created new course: %s", settings.course_name)
+            logger.info("Course created course=%s", settings.course_name)
             return redirect(url_for("course.course_page", course_name=settings.course_name))
 
         return render_template(
@@ -788,7 +788,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         try:
             validate_csrf(request.form.get("csrf_token"))
         except ValidationError as e:
-            app.logger.error("CSRF validation failed: %s", e)
+            app.logger.error("CSRF validation failed error=%s", e)
             return render_template("edit_course.html", error_message="CSRF Error", rms=app.app_config.rms)
 
         updated_settings = CourseConfig(
@@ -808,7 +808,7 @@ def edit_course(course_name: str) -> ResponseReturnValue:
         )
 
         if app.storage_api.edit_course(updated_settings):
-            logger.info("Successfully updated course settings for: %s", sanitize_log_data(course_name))
+            logger.info("Course settings updated course=%s", sanitize_log_data(course_name))
             flash("Course changes saved successfully.", category="success")
             return redirect(url_for("instance_admin.edit_course", course_name=course_name))
 
@@ -849,7 +849,7 @@ def delete_course(course_name: str) -> ResponseReturnValue:
         return {"error": str(e)}, HTTPStatus.CONFLICT
 
     logger.info(
-        "Successfully deleted course '%s' by user '%s'",
+        "Course deleted course=%s actor=%s",
         sanitize_log_data(course_name),
         sanitize_log_data(session.get("manytask", {}).get("username")),
     )
@@ -866,7 +866,7 @@ def instance_admin_panel() -> ResponseReturnValue:
         try:
             validate_csrf(request.form.get("csrf_token"))
         except ValidationError as e:
-            app.logger.error("CSRF validation failed: %s", e)
+            app.logger.error("CSRF validation failed error=%s", e)
             return render_template("instance_admin_panel.html", error_message="CSRF Error")
 
         action = request.form.get("action", "")
@@ -877,16 +877,12 @@ def instance_admin_panel() -> ResponseReturnValue:
 
         if action == "grant":
             app.storage_api.set_instance_admin_status(stored_user.username, True)
-            app.logger.warning(
-                "Instance Admin %s granted instance admin status to %s", current_instance_admin, username
-            )
+            app.logger.warning("Instance admin status granted actor=%s user=%s", current_instance_admin, username)
         elif action == "revoke":
             app.storage_api.set_instance_admin_status(stored_user.username, False)
-            app.logger.warning(
-                "Instance Admin %s revoked instance admin status from %s", current_instance_admin, username
-            )
+            app.logger.warning("Instance admin status revoked actor=%s user=%s", current_instance_admin, username)
         else:
-            app.logger.error("Unknown action: %s", action)
+            app.logger.error("Instance admin action rejected action=%s", action)
 
         return redirect(url_for("instance_admin.instance_admin_panel"))
 
@@ -932,7 +928,7 @@ def update_profile() -> ResponseReturnValue:
     try:
         validate_csrf(request.form.get("csrf_token"))
     except ValidationError as e:
-        app.logger.error("CSRF validation failed: %s", e)
+        app.logger.error("CSRF validation failed error=%s", e)
         return render_template("courses.html", error_message="CSRF Error")
 
     if request_username != current_username and not check_if_current_user_is_instance_admin(app):
@@ -942,7 +938,7 @@ def update_profile() -> ResponseReturnValue:
     if target_user is None:
         abort(HTTPStatus.NOT_FOUND)
     app.storage_api.update_user_profile(target_user.username, new_first_name, new_last_name)
-    logger.info("Successfully updated profile for user: %s", sanitize_log_data(request_username))
+    logger.info("User profile updated user=%s", sanitize_log_data(request_username))
 
     referrer = request.referrer
     if referrer:
@@ -971,15 +967,15 @@ def namespace_panel(namespace_id: int) -> ResponseReturnValue:
     try:
         namespace, user_role = app.storage_api.get_namespace_by_id(namespace_id, username)
     except PermissionError:
-        logger.warning("User %s attempted to access namespace %d without permission", username, namespace_id)
+        logger.warning("Namespace access denied user=%s namespace_id=%d", username, namespace_id)
         abort(HTTPStatus.FORBIDDEN)
     except Exception as e:
-        logger.error("Error accessing namespace %d: %s", namespace_id, str(e))
+        logger.error("Failed to access namespace namespace_id=%d error=%s", namespace_id, str(e))
         abort(HTTPStatus.NOT_FOUND)
 
     if not is_instance_admin and user_role != "namespace_admin":
         logger.warning(
-            "User %s with role %s attempted to access namespace %d",
+            "Namespace access denied user=%s role=%s namespace_id=%d",
             username,
             user_role,
             namespace_id,
@@ -1003,7 +999,7 @@ def namespace_panel(namespace_id: int) -> ResponseReturnValue:
                     }
                 )
         except Exception as e:
-            logger.warning("Could not get user info for user_id=%s: %s", user_id, str(e))
+            logger.warning("Failed to fetch user user_id=%s error=%s", user_id, str(e))
 
     courses = app.storage_api.get_namespace_courses(namespace_id)
 

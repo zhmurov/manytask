@@ -94,7 +94,7 @@ class SourceCraftApi(RmsApi):
         self._iam_token: str | None = None
         self._iam_token_last_issued: datetime | None = None
 
-        logger.info(f"Initializing SourcecraftApi with base_url: {self.base_url}")
+        logger.info("Initializing SourceCraft client base_url=%s", self.base_url)
 
     def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         kwargs.setdefault("headers", {}).update(self._request_headers)
@@ -164,7 +164,7 @@ class SourceCraftApi(RmsApi):
             if data.get("error_code") == "SlugIsNotAvailable":
                 existing_repo = self._get_repo(repo_slug)
                 if existing_repo.status_code == HTTPStatus.OK:
-                    logger.info(f"Repo {repo_slug} already exists, skipping creation")
+                    logger.info("Repository creation skipped repo=%s reason=already_exists", repo_slug)
                     return
         raise RmsApiException(f"Failed to create repo (HTTP {response.status_code}): {data}")
 
@@ -213,7 +213,7 @@ class SourceCraftApi(RmsApi):
         if response.status_code != HTTPStatus.OK:
             data = response.json()
             if data.get("error_code", "") in {"FailedPrecondition", "UserNotOrganizationMember"}:
-                logger.info(f"User {user_id} not found in org {self._org_slug}, inviting them")
+                logger.info("Inviting organization member rms_id=%s organization=%s", user_id, self._org_slug)
                 invitee_id = self._invite_user(user_id)
                 payload["subject_roles"][0]["subject"] = {
                     "type": "invitee",
@@ -261,7 +261,7 @@ class SourceCraftApi(RmsApi):
         :param course_group: UNUSED
         :param course_public_repo: public repo slug
         """
-        logger.info(f"Creating public repo: {course_public_repo}")
+        logger.info("Creating public repository repo=%s", course_public_repo)
 
         self._create_repo(
             repo_slug=course_public_repo,
@@ -303,7 +303,7 @@ class SourceCraftApi(RmsApi):
         if response.status_code == HTTPStatus.OK:
             return True
         elif response.status_code == HTTPStatus.NOT_FOUND:
-            logger.info(f"Project {project_group}-{project_name} not found")
+            logger.info("Project not found group=%s project=%s", project_group, project_name)
             return False
         else:
             raise RmsApiException(f"Failed to check if project exists: {response.json()}")
@@ -358,7 +358,7 @@ class SourceCraftApi(RmsApi):
         :param protected_branches: UNUSED here, SourceCraft branch protection is declared in
             .sourcecraft/branches.yaml inside the repository (so it comes with the template repo), not via the API
         """
-        logger.info(f"Creating repo for user {rms_user.username}")
+        logger.info("Creating student repository user=%s", rms_user.username)
 
         student_repo_slug = f"{course_students_group}-{normalize_string(rms_user.username)}"
 
@@ -429,7 +429,7 @@ class SourceCraftApi(RmsApi):
             return self._get_user_by_yandex_login(username)
         except RmsApiException:
             user_slug = normalize_string(username)
-            logger.info(f"No yandex login {username}, looking up the user in SourceCraft by slug {user_slug}")
+            logger.info("Resolving SourceCraft user auth_user=%s rms_slug=%s", username, user_slug)
             return self._get_user_profile(user_slug)
 
     def _get_user_by_yandex_login(self, auth_username: str) -> RmsUser:

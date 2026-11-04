@@ -8,7 +8,7 @@ from http import HTTPStatus
 from typing import Any, Callable, TypeVar
 
 import yaml
-from flask import Blueprint, abort, current_app, jsonify, request, session
+from flask import Blueprint, abort, current_app, g, jsonify, request, session
 from flask.typing import ResponseReturnValue
 from enum import Enum
 from pydantic import ValidationError
@@ -68,7 +68,7 @@ namespace_bp = Blueprint("namespace_api", __name__, url_prefix="/api")
 def __get_course_or_not_found(storage_api: StorageApi, course_name: str) -> Course:
     course = storage_api.get_course(course_name)
     if course is None:
-        logger.warning("Course not found: %s", course_name)
+        logger.warning("Course not found course=%s", course_name)
         abort(HTTPStatus.NOT_FOUND, f"Course '{sanitize_log_data(course_name)}' not found")
     return course
 
@@ -112,7 +112,7 @@ def _add_namespace_role(
             assigned_by_username=assigned_by_username,
         )
     except NoResultFound as e:
-        logger.warning("User %s not registered in manytask: %s", sanitize_log_data(username), str(e))
+        logger.warning("User not registered user=%s error=%s", sanitize_log_data(username), str(e))
         return None, (
             jsonify(
                 ErrorResponse(
@@ -122,13 +122,15 @@ def _add_namespace_role(
             HTTPStatus.NOT_FOUND,
         )
     except IntegrityError:
-        logger.warning("User %s already has a role in namespace id=%s", sanitize_log_data(username), namespace_id)
+        logger.warning(
+            "Namespace role already assigned user=%s namespace_id=%s", sanitize_log_data(username), namespace_id
+        )
         return None, (
             jsonify(ErrorResponse(error="User already has a role in this namespace").model_dump()),
             HTTPStatus.CONFLICT,
         )
     except ValueError as e:
-        logger.error("Invalid role %s: %s", role, str(e))
+        logger.error("Invalid namespace role role=%s error=%s", role, str(e))
         return None, (jsonify(ErrorResponse(error=str(e)).model_dump()), HTTPStatus.BAD_REQUEST)
 
     # The RMS group membership is added only after the database row exists.
@@ -140,12 +142,12 @@ def _add_namespace_role(
             rms_id=stored_user.rms_id,
         )
         logger.info(
-            "Added RMS user id=%s to group id=%s",
+            "RMS group membership added rms_id=%s group_id=%s",
             stored_user.rms_id,
             namespace.gitlab_group_id,
         )
     except Exception as e:
-        logger.error("Failed to add user %s to RMS group: %s", sanitize_log_data(username), str(e))
+        logger.error("Failed to add RMS group member user=%s error=%s", sanitize_log_data(username), str(e))
         return None, (
             jsonify(ErrorResponse(error="Failed to add user to GitLab group").model_dump()),
             HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -173,7 +175,7 @@ def _check_course_admin_access(course_name: str) -> ResponseReturnValue | None:
         return None
 
     logger.warning(
-        "User %s attempted to administer course %s without permission",
+        "Course admin access denied user=%s course=%s",
         sanitize_log_data(username),
         sanitize_log_data(course_name),
     )
@@ -201,7 +203,10 @@ def validate_json_request(model_class: type[T]) -> tuple[T | None, ResponseRetur
         data = model_class.model_validate(request.get_json())
         return data, None
     except ValidationError as exc:
-        logger.warning("Invalid request payload: %s", exc.errors())
+        logger.warning(
+            "Request validation failed errors=%s",
+            exc.errors(include_input=False, include_context=False, include_url=False),
+        )
         return None, (
             jsonify(ErrorResponse(error=f"Invalid request data: {exc.errors()}").model_dump()),
             HTTPStatus.BAD_REQUEST,
@@ -263,7 +268,7 @@ def requires_namespace_admin(
                     namespace, user_role = storage_api.get_namespace_by_id(namespace_id, username)
                     if user_role != "namespace_admin":
                         logger.warning(
-                            "User %s (role=%s) attempted to access namespace id=%s without admin privileges",
+                            "Namespace admin access denied user=%s role=%s namespace_id=%s",
                             username,
                             user_role,
                             namespace_id,
@@ -274,13 +279,13 @@ def requires_namespace_admin(
                             ).model_dump()
                         ), HTTPStatus.FORBIDDEN
                 except PermissionError:
-                    logger.warning("User %s attempted to access namespace id=%s without access", username, namespace_id)
+                    logger.warning("Namespace access denied user=%s namespace_id=%s", username, namespace_id)
                     return jsonify(ErrorResponse(error="Access denied").model_dump()), HTTPStatus.FORBIDDEN
             else:
                 try:
                     namespace, _ = storage_api.get_namespace_by_id(namespace_id, username)
                 except (PermissionError, NoResultFound):
-                    logger.warning("Namespace id=%s not found", namespace_id)
+                    logger.warning("Namespace not found namespace_id=%s", namespace_id)
                     if return_404_if_not_found:
                         return jsonify(ErrorResponse(error="Namespace not found").model_dump()), HTTPStatus.NOT_FOUND
                     else:
@@ -301,7 +306,7 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
 
         course_name = kwargs["course_name"]
 
-        logger.debug("Checking token for course=%s", course_name)
+        logger.debug("Checking course token course=%s", course_name)
 
         course = __get_course_or_not_found(app.storage_api, course_name)
         course_token = course.token
@@ -310,7 +315,7 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
         auth_header = request.headers.get("Authorization")
 
         if form_token is None and auth_header is None:
-            logger.warning("Missing authorization for course=%s (no header, no form field)", course_name)
+            logger.warning("Course token rejected course=%s reason=missing", course_name)
             abort(
                 HTTPStatus.FORBIDDEN,
                 "Missing authorization: provide course token via 'Authorization' header or 'token' form field",
@@ -323,21 +328,22 @@ def requires_token(f: Callable[..., Any]) -> Callable[..., Any]:
         submitted_token = token_parts[-1] if token_parts else ""
 
         if not submitted_token:
-            logger.warning("Empty authorization token for course=%s", course_name)
+            logger.warning("Course token rejected course=%s reason=empty", course_name)
             abort(HTTPStatus.FORBIDDEN, "Empty authorization token")
 
         if not course_token:
-            logger.error("Course=%s has no API token configured", course_name)
+            logger.error("Course token not configured course=%s", course_name)
             abort(
                 HTTPStatus.FORBIDDEN,
                 f"Course '{sanitize_log_data(course_name)}' has no API token configured",
             )
 
         if not secrets.compare_digest(submitted_token, course_token):
-            logger.warning("Invalid token for course=%s", course_name)
+            logger.warning("Course token rejected course=%s reason=invalid", course_name)
             abort(HTTPStatus.FORBIDDEN, "Invalid course token")
 
-        logger.debug("Token validated for course=%s", course_name)
+        g.log_auth_method = "course_token"
+        logger.debug("Course token validated course=%s", course_name)
         return f(*args, **kwargs)
 
     return decorated
@@ -392,8 +398,13 @@ def _update_score(
     allow_reduction: bool = False,
 ) -> int:
     logger.debug(
-        f"Update score: task={task.name}, old_score={old_score}, new_score={score}, "
-        f"flags={flags}, submit_time={submit_time}, check_deadline={check_deadline}"
+        "Update score: task=%s, old_score=%s, new_score=%s, flags=%s, submit_time=%s, check_deadline=%s",
+        task.name,
+        old_score,
+        score,
+        flags,
+        submit_time,
+        check_deadline,
     )
     if old_score < 0 and not allow_reduction:
         return old_score
@@ -428,14 +439,14 @@ def _validate_and_extract_params(
         user_id = form_data["user_id"]
         try:
             rms_user = rms_api.get_rms_user_by_id(user_id)
-            logger.info("Found RMS user by id=%s: %s", sanitize_log_data(user_id), rms_user.username)
+            logger.info("RMS user resolved rms_id=%s user=%s", sanitize_log_data(user_id), rms_user.username)
         except RmsApiException:
             abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with id={sanitize_log_data(user_id)}")
     elif "username" in form_data:
         username = form_data["username"]
         try:
             rms_user = rms_api.get_rms_user_by_username(username)
-            logger.info("Found RMS user by username=%s: %s", sanitize_log_data(username), rms_user.username)
+            logger.info("RMS user resolved requested_user=%s user=%s", sanitize_log_data(username), rms_user.username)
         except RmsApiException:
             abort(HTTPStatus.NOT_FOUND, f"There is no RMS user with username='{sanitize_log_data(username)}'")
     else:
@@ -448,7 +459,7 @@ def _validate_and_extract_params(
     try:
         course, group, task = storage_api.find_task(course_name, task_name)
     except (KeyError, TaskDisabledError):
-        logger.warning("Task not found or disabled: %s", sanitize_log_data(task_name))
+        logger.warning("Task unavailable task=%s", sanitize_log_data(task_name))
         abort(
             HTTPStatus.NOT_FOUND,
             f"Task '{sanitize_log_data(task_name)}' not found in course "
@@ -465,7 +476,9 @@ def _process_submit_time(submit_time_str: str | None, now_with_timezone: datetim
         try:
             submit_time = datetime.strptime(submit_time_str, "%Y-%m-%d %H:%M:%S%z")
         except ValueError:
-            logger.warning("Invalid submit_time format: %s", sanitize_log_data(submit_time_str))
+            logger.warning(
+                "Submission time rejected submit_time=%s reason=invalid_format", sanitize_log_data(submit_time_str)
+            )
             submit_time = None
 
     submit_time = submit_time or now_with_timezone
@@ -480,7 +493,7 @@ def _process_score(form_data: dict[str, Any], task_score: int) -> int | None:
         return None
 
     score_str = form_data["score"]
-    logger.debug("Raw score input: %s", sanitize_log_data(score_str))
+    logger.debug("Parsing score score=%s", sanitize_log_data(score_str))
     try:
         min_score = 0.0
         max_score = 2.0
@@ -520,7 +533,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
     reported_score = _process_score(request.form, task.score)
     if reported_score is None:
         reported_score = task.score
-        logger.info("Got score=None; set max score for %s of %s", task.name, task.score)
+        logger.info("Using maximum task score task=%s score=%s", task.name, task.score)
 
     check_deadline = True
     if "check_deadline" in request.form:
@@ -534,13 +547,20 @@ def report_score(course_name: str) -> ResponseReturnValue:
     submit_time = _process_submit_time(submit_time_str, app.storage_api.get_now_with_timezone(course.course_name))
 
     # Log with sanitized values
-    logger.info("Use submit_time: %s", submit_time)
+    logger.info("Submission time resolved submit_time=%s", submit_time)
     stored_user = _get_stored_user_or_not_found(app.storage_api, rms_user.id)
     manytask_username = stored_user.username
 
     logger.info(
-        f"user={manytask_username} (rms_id={rms_user.id}), task={task.name}, "
-        f"reported_score={reported_score}, submit_time={submit_time}, check_deadline={check_deadline}"
+        "Reporting score user=%s rms_id=%s course=%s task=%s reported_score=%s submit_time=%s check_deadline=%s allow_reduction=%s",
+        manytask_username,
+        rms_user.id,
+        course_name,
+        task.name,
+        reported_score,
+        submit_time,
+        check_deadline,
+        allow_reduction,
     )
 
     update_function = functools.partial(
@@ -555,7 +575,7 @@ def report_score(course_name: str) -> ResponseReturnValue:
     )
     final_score = app.storage_api.store_score(course.course_name, manytask_username, task.name, update_function)
 
-    logger.info("Stored final_score=%s for user=%s, task=%s", final_score, manytask_username, task.name)
+    logger.info("Score stored score=%s user=%s task=%s", final_score, manytask_username, task.name)
 
     # Recalculate and save student's final grade after score update
     try:
@@ -563,9 +583,9 @@ def report_score(course_name: str) -> ResponseReturnValue:
             "students"
         ][0]
         app.storage_api.calculate_and_save_grade(course.course_name, manytask_username, student_data)
-        logger.info("Recalculated and saved grade for user=%s after score update", manytask_username)
+        logger.info("Grade recalculated after score update user=%s", manytask_username)
     except Exception as e:
-        logger.error("Failed to recalculate grade for user=%s: %s", manytask_username, str(e))
+        logger.error("Failed to recalculate grade user=%s error=%s", manytask_username, str(e))
         # Don't fail the request if grade calculation fails
 
     return {
@@ -595,7 +615,7 @@ def get_score(course_name: str) -> ResponseReturnValue:
 
     try:
         student_task_score = student_scores[task.name]
-        logger.info("user=%s, task=%s, score=%s", manytask_username, task.name, student_task_score)
+        logger.info("Score fetched user=%s task=%s score=%s", manytask_username, task.name, student_task_score)
     except Exception:
         return f"Cannot get score for task {task.name} for {manytask_username}", HTTPStatus.NOT_FOUND
 
@@ -680,7 +700,7 @@ def update_config(course_name: str) -> ResponseReturnValue:
     if course.status == CourseStatus.FINISHED:
         abort(HTTPStatus.CONFLICT, f"Cannot update config for the course '{course_name}' that is already finished.")
 
-    logger.info("Running update_config for course=%s", course_name)
+    logger.info("Updating course configuration course=%s", course_name)
 
     # ----- get and validate request parameters ----- #
     try:
@@ -698,11 +718,11 @@ def update_config(course_name: str) -> ResponseReturnValue:
     try:
         # Store the new config
         app.store_config(course_name, config_data)
-        logger.info("Stored new config for course=%s", course_name)
+        logger.info("Course configuration updated course=%s", course_name)
     except ValidationError as e:
         return (_format_config_validation_error(course_name, e), HTTPStatus.BAD_REQUEST)
     except Exception:
-        logger.exception("Error while updating config for course=%s", course_name)
+        logger.exception("Failed to update course configuration course=%s", course_name)
         return f"Invalid config for course={course_name}", HTTPStatus.BAD_REQUEST
 
     # Recalculate grades for all students using the new config
@@ -748,7 +768,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
 
     if auth_method == AuthMethod.SESSION:
         username = session["manytask"]["username"]
-        logger.info("Request by user=%s for course=%s", username, course_name)
+        logger.info("Checking score update permission actor=%s course=%s", username, course_name)
         student_course_admin = storage_api.check_if_course_admin(course_name, username)
 
         if not student_course_admin:
@@ -760,7 +780,10 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     try:
         payload = ManytaskUpdateDatabasePayload.model_validate(request.get_json())
     except ValidationError as exc:
-        logger.warning("Invalid request payload: %s", exc.errors())
+        logger.warning(
+            "Request validation failed errors=%s",
+            exc.errors(include_input=False, include_context=False, include_url=False),
+        )
         return jsonify(
             {"success": False, "message": "Invalid request data", "errors": exc.errors()}
         ), HTTPStatus.BAD_REQUEST
@@ -769,7 +792,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
     row_data = payload.row_data
 
     student_username = row_data.username
-    logger.info("Updating scores for user=%s: %s", sanitize_log_data(student_username), new_scores)
+    logger.info("Updating scores user=%s scores=%s", sanitize_log_data(student_username), new_scores)
 
     try:
         for task_name, new_score in new_scores.items():
@@ -782,7 +805,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
                     is_solved=payload.new_solved.get(task_name),
                 )
     except Exception as e:
-        logger.error("Error updating database: %s", str(e))
+        logger.exception("Failed to store scores user=%s course=%s", student_username, course_name)
         return jsonify(
             {"success": False, "message": "Internal error when trying to store score"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -805,7 +828,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
         # Add override indicator for frontend
         row_data.grade_is_override = storage_api.is_grade_overridden(course.course_name, student_username)
 
-        logger.info("Successfully updated scores for user=%s", sanitize_log_data(student_username))
+        logger.info("Scores updated user=%s", sanitize_log_data(student_username))
         return jsonify(
             {
                 "success": True,
@@ -814,7 +837,7 @@ def update_database(course_name: str, auth_method: AuthMethod) -> ResponseReturn
         ), HTTPStatus.OK
 
     except Exception as e:
-        logger.error("Error calculating grade: %s", str(e))
+        logger.exception("Failed to recalculate grade user=%s course=%s", student_username, course_name)
         return jsonify(
             {"success": False, "message": "Internal error when calculating new grade. Try refresh page."}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -830,7 +853,7 @@ def update_comment(course_name: str) -> ResponseReturnValue:
     storage_api = app.storage_api
 
     profile_username_ = session["manytask"]["username"]
-    logger.info("Comment update request by user=%s for course=%s", profile_username_, course_name)
+    logger.info("Checking comment update permission actor=%s course=%s", profile_username_, course_name)
 
     student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username_)
 
@@ -855,11 +878,11 @@ def update_comment(course_name: str) -> ResponseReturnValue:
 
         storage_api.update_student_comment(course.course_name, username, sanitized_comment)
 
-        logger.info("Successfully updated comment for user=%s", sanitize_log_data(username))
+        logger.info("Student comment updated user=%s", sanitize_log_data(username))
         return jsonify({"success": True}), HTTPStatus.OK
 
     except Exception as e:
-        logger.error("Error updating comment: %s", str(e))
+        logger.exception("Failed to update student comment course=%s", course_name)
         return jsonify(
             {"success": False, "message": "Internal error when updating comment"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -918,10 +941,12 @@ def create_namespace() -> ResponseReturnValue:
         rms_id = session["rms"]["rms_id"]
         logger.info("Creating GitLab group for namespace name=%s slug=%s", name, slug)
         gitlab_group_id = rms_api.create_namespace_group(name=name, path=slug, description=description)
-        logger.info("GitLab group created with id=%s", gitlab_group_id)
+        logger.info("Namespace RMS group created group_id=%s", gitlab_group_id)
 
         rms_api.add_user_to_namespace_group(gitlab_group_id, rms_id)
-        logger.info("Added creator rms_id=%s to GitLab group id=%s as Maintainer", rms_id, gitlab_group_id)
+        logger.info(
+            "Namespace creator added to RMS group rms_id=%s group_id=%s role=maintainer", rms_id, gitlab_group_id
+        )
 
         namespace = storage_api.create_namespace(
             name=name,
@@ -932,7 +957,7 @@ def create_namespace() -> ResponseReturnValue:
         )
 
         logger.info(
-            "Namespace created successfully by user=%s: id=%s slug=%s gitlab_group_id=%s",
+            "Namespace created actor=%s namespace_id=%s slug=%s group_id=%s",
             username,
             namespace.id,
             slug,
@@ -1024,11 +1049,11 @@ def get_namespaces() -> ResponseReturnValue:
             ]
 
         result = NamespaceListResponse(namespaces=namespace_list)
-        logger.info("Returning %d namespaces for user=%s", len(namespace_list), username)
+        logger.info("Namespaces fetched count=%d user=%s", len(namespace_list), username)
         return jsonify(result.model_dump()), HTTPStatus.OK
 
     except Exception as e:
-        logger.error("Error fetching namespaces for user=%s: %s", username, str(e), exc_info=True)
+        logger.error("Failed to fetch namespaces user=%s error=%s", username, str(e), exc_info=True)
         return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
@@ -1075,15 +1100,17 @@ def get_namespace_by_id(namespace_id: int) -> ResponseReturnValue:
                 gitlab_group_id=namespace.gitlab_group_id,
             )
 
-        logger.info("User %s accessed namespace id=%s", username, namespace_id)
+        logger.info("Namespace fetched actor=%s namespace_id=%s", username, namespace_id)
         return jsonify(result.model_dump()), HTTPStatus.OK
 
     except PermissionError as e:
-        logger.warning("Access denied for user=%s to namespace id=%s", username, namespace_id)
+        logger.warning("Namespace access denied user=%s namespace_id=%s", username, namespace_id)
         return jsonify(ErrorResponse(error="Access denied").model_dump()), HTTPStatus.FORBIDDEN
 
     except Exception as e:
-        logger.error("Error fetching namespace id=%s for user=%s: %s", namespace_id, username, str(e), exc_info=True)
+        logger.error(
+            "Failed to fetch namespace namespace_id=%s user=%s error=%s", namespace_id, username, str(e), exc_info=True
+        )
         return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
@@ -1098,11 +1125,12 @@ def update_namespace(namespace_id: int, namespace: Any, validated_data: UpdateNa
     try:
         namespace = app.storage_api.update_namespace(namespace_id, validated_data.name, validated_data.description)
         result = NamespaceResponse.model_validate(namespace, from_attributes=True)
+        logger.info("Namespace updated namespace_id=%s", namespace_id)
         return jsonify(result.model_dump()), HTTPStatus.OK
     except NoResultFound:
         return jsonify(ErrorResponse(error="Namespace not found").model_dump()), HTTPStatus.NOT_FOUND
     except Exception:
-        logger.exception("Error updating namespace id=%s", namespace_id)
+        logger.exception("Failed to update namespace namespace_id=%s", namespace_id)
         return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
@@ -1116,6 +1144,7 @@ def delete_namespace(namespace_id: int, namespace: Any, validated_data: DeleteNa
 
     try:
         app.storage_api.delete_namespace(namespace_id, validated_data.name)
+        logger.info("Namespace deleted namespace_id=%s", namespace_id)
         return "", HTTPStatus.NO_CONTENT
     except NoResultFound:
         return jsonify(ErrorResponse(error="Namespace not found").model_dump()), HTTPStatus.NOT_FOUND
@@ -1124,7 +1153,7 @@ def delete_namespace(namespace_id: int, namespace: Any, validated_data: DeleteNa
     except ValueError as error:
         return jsonify(ErrorResponse(error=str(error)).model_dump()), HTTPStatus.BAD_REQUEST
     except Exception:
-        logger.exception("Error deleting namespace id=%s", namespace_id)
+        logger.exception("Failed to delete namespace namespace_id=%s", namespace_id)
         return jsonify(
             ErrorResponse(error="Failed to delete namespace. Please try again.").model_dump()
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -1181,7 +1210,7 @@ def add_user_to_namespace(
             return error
 
         logger.info(
-            "User %s added username=%s to namespace id=%s with role %s",
+            "Namespace role assigned actor=%s user=%s namespace_id=%s role=%s",
             username,
             target_username,
             namespace_id,
@@ -1236,12 +1265,16 @@ def get_namespace_users(namespace_id: int, namespace: Any) -> ResponseReturnValu
 
         result = NamespaceUsersListResponse(users=users)
 
-        logger.info("Returning %d users for namespace id=%s to user=%s", len(users), namespace_id, username)
+        logger.info("Namespace users fetched count=%d namespace_id=%s actor=%s", len(users), namespace_id, username)
         return jsonify(result.model_dump()), HTTPStatus.OK
 
     except Exception as e:
         logger.error(
-            "Error fetching users for namespace id=%s by user=%s: %s", namespace_id, username, str(e), exc_info=True
+            "Failed to fetch namespace users namespace_id=%s actor=%s error=%s",
+            namespace_id,
+            username,
+            str(e),
+            exc_info=True,
         )
         return jsonify(ErrorResponse(error="Internal server error").model_dump()), HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -1275,7 +1308,7 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
         try:
             role, removed_rms_id = storage_api.remove_user_from_namespace(namespace_id, user_id)
             logger.info(
-                "User %s removed user_id=%s (rms_id=%s, role=%s) from namespace id=%s in database",
+                "Namespace member removed actor=%s user_id=%s rms_id=%s role=%s namespace_id=%s",
                 username,
                 user_id,
                 removed_rms_id,
@@ -1283,27 +1316,27 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
                 namespace_id,
             )
         except NoResultFound:
-            logger.warning("User id=%s not found in namespace id=%s", user_id, namespace_id)
+            logger.warning("Namespace member not found user_id=%s namespace_id=%s", user_id, namespace_id)
             return jsonify(ErrorResponse(error="User not found in namespace").model_dump()), HTTPStatus.NOT_FOUND
 
         try:
             rms_api.remove_user_from_namespace_group(gitlab_group_id=namespace.gitlab_group_id, rms_id=removed_rms_id)
             logger.info(
-                "User %s removed user rms_id=%s from GitLab group id=%s",
+                "RMS group member removed actor=%s rms_id=%s group_id=%s",
                 username,
                 removed_rms_id,
                 namespace.gitlab_group_id,
             )
         except Exception as e:
             logger.error(
-                "Failed to remove user rms_id=%s from GitLab group id=%s: %s",
+                "Failed to remove RMS group member rms_id=%s group_id=%s error=%s",
                 removed_rms_id,
                 namespace.gitlab_group_id,
                 str(e),
             )
 
         logger.info(
-            "User %s successfully removed user_id=%s from namespace id=%s",
+            "Namespace member removed actor=%s user_id=%s namespace_id=%s",
             username,
             user_id,
             namespace_id,
@@ -1374,14 +1407,14 @@ def update_user_role_in_namespace(
             try:
                 rms_api.remove_user_from_namespace_group(gitlab_group_id=namespace.gitlab_group_id, rms_id=rms_id)
                 logger.info(
-                    "User %s removed user rms_id=%s from GitLab group id=%s (role change to student)",
+                    "RMS group member removed actor=%s rms_id=%s group_id=%s new_role=student",
                     username,
                     rms_id,
                     namespace.gitlab_group_id,
                 )
             except Exception as e:
                 logger.error(
-                    "Failed to remove user rms_id=%s from GitLab group id=%s: %s",
+                    "Failed to remove RMS group member rms_id=%s group_id=%s error=%s",
                     rms_id,
                     namespace.gitlab_group_id,
                     str(e),
@@ -1394,7 +1427,7 @@ def update_user_role_in_namespace(
         try:
             old_role, actual_new_role, _ = storage_api.update_user_role_in_namespace(namespace_id, user_id, new_role)
             logger.info(
-                "User %s updated role for user_id=%s in namespace id=%s: %s -> %s",
+                "Namespace role updated actor=%s user_id=%s namespace_id=%s old_role=%s new_role=%s",
                 username,
                 user_id,
                 namespace_id,
@@ -1402,10 +1435,10 @@ def update_user_role_in_namespace(
                 actual_new_role,
             )
         except NoResultFound:
-            logger.warning("User id=%s not found in namespace id=%s", user_id, namespace_id)
+            logger.warning("Namespace member not found user_id=%s namespace_id=%s", user_id, namespace_id)
             return jsonify(ErrorResponse(error="User not found in namespace").model_dump()), HTTPStatus.NOT_FOUND
         except ValueError as e:
-            logger.warning("Invalid role %s: %s", new_role, str(e))
+            logger.warning("Invalid namespace role role=%s error=%s", new_role, str(e))
             return jsonify(ErrorResponse(error=str(e)).model_dump()), HTTPStatus.BAD_REQUEST
 
         return jsonify(
@@ -1466,9 +1499,11 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
     course_name = validated_data.course_name
     course_slug = validated_data.slug
     owner_rms_ids = validated_data.owners or []
+    g.log_course = course_name
+    g.log_namespace_id = namespace_id
 
     logger.info(
-        "User %s creating course course_name=%s slug=%s in namespace_id=%s with owners=%s",
+        "Creating course actor=%s course=%s slug=%s namespace_id=%s owner_rms_ids=%s",
         username,
         course_name,
         course_slug,
@@ -1505,7 +1540,7 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
                         ), HTTPStatus.BAD_REQUEST
 
             except Exception as e:
-                logger.error("Error validating owners: %s", str(e))
+                logger.error("Failed to validate course owners error=%s", str(e))
                 return jsonify(ErrorResponse(error=f"Invalid owners: {str(e)}").model_dump()), HTTPStatus.BAD_REQUEST
 
         namespace_slug = namespace.slug if namespace is not None else ""
@@ -1537,9 +1572,9 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
                 course_name=course_name,
                 course_slug=course_slug,
             )
-            logger.info("Created course group with id=%s", course_group_id)
+            logger.info("Course group created group_id=%s", course_group_id)
         except RuntimeError as e:
-            logger.error("Failed to create course group: %s", str(e))
+            logger.exception("Failed to create course group course=%s group=%s", course_name, gitlab_course_group)
             if "already exists" in str(e).lower():
                 return jsonify(
                     ErrorResponse(error=f"Course with slug '{course_slug}' already exists").model_dump()
@@ -1549,21 +1584,25 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
             ), HTTPStatus.INTERNAL_SERVER_ERROR
 
         try:
-            logger.info("Creating public repo %s", gitlab_course_public_repo)
+            logger.info("Creating public repository repo=%s", gitlab_course_public_repo)
             rms_api.create_public_repo(gitlab_course_group, gitlab_course_public_repo)
-            logger.info("Created public repo")
+            logger.info("Public repository created repo=%s", gitlab_course_public_repo)
         except Exception as e:
-            logger.error("Failed to create public repo: %s", str(e))
+            logger.exception(
+                "Failed to create public repository course=%s repo=%s", course_name, gitlab_course_public_repo
+            )
             return jsonify(
                 ErrorResponse(error=f"Failed to create public repo: {str(e)}").model_dump()
             ), HTTPStatus.INTERNAL_SERVER_ERROR
 
         try:
-            logger.info("Creating students group %s", gitlab_course_students_group)
+            logger.info("Creating students group group=%s", gitlab_course_students_group)
             rms_api.create_students_group(gitlab_course_students_group, parent_group_id=course_group_id)
-            logger.info("Created students group")
+            logger.info("Students group created group=%s", gitlab_course_students_group)
         except Exception as e:
-            logger.error("Failed to create students group: %s", str(e))
+            logger.exception(
+                "Failed to create students group course=%s group=%s", course_name, gitlab_course_students_group
+            )
             return jsonify(
                 ErrorResponse(error=f"Failed to create students group: {str(e)}").model_dump()
             ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -1587,12 +1626,12 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
             success = storage_api.create_course(course_config)
 
             if not success:
-                logger.error("Course with name=%s already exists in database", course_name)
+                logger.error("Course already exists course=%s", course_name)
                 return jsonify(
                     ErrorResponse(error=f"Course with name '{course_name}' already exists").model_dump()
                 ), HTTPStatus.CONFLICT
 
-            logger.info("Created course in database: %s", course_name)
+            logger.info("Course stored course=%s", course_name)
 
         except Exception as e:
             logger.error("Failed to create course in database: %s", str(e), exc_info=True)
@@ -1612,21 +1651,21 @@ def create_course_api(validated_data: CreateCourseRequest) -> ResponseReturnValu
                     owner_rms_ids=owner_rms_ids,
                     namespace_id=namespace_id,
                 )
-                logger.info("Added %d owners to course %s", len(added_owners), course_name)
+                logger.info("Course owners assigned count=%d course=%s", len(added_owners), course_name)
 
             except ValueError as e:
-                logger.error("Failed to add owners: %s", str(e))
+                logger.error("Failed to assign course owners error=%s", str(e))
                 return jsonify(
                     ErrorResponse(error=f"Failed to add owners: {str(e)}").model_dump()
                 ), HTTPStatus.BAD_REQUEST
             except Exception as e:
-                logger.error("Failed to add owners: %s", str(e), exc_info=True)
+                logger.error("Failed to assign course owners error=%s", str(e), exc_info=True)
                 return jsonify(
                     ErrorResponse(error=f"Failed to add owners: {str(e)}").model_dump()
                 ), HTTPStatus.INTERNAL_SERVER_ERROR
 
         logger.info(
-            "Successfully created course %s (slug=%s) in namespace %s with %d owners",
+            "Course created course=%s slug=%s namespace=%s owner_count=%d",
             course_name,
             course_slug,
             namespace.name if namespace else "(no namespace)",
@@ -1672,7 +1711,7 @@ def override_grade(course_name: str) -> ResponseReturnValue:
     storage_api = app.storage_api
 
     profile_username = session["manytask"]["username"]
-    logger.info("Grade override request by admin=%s for course=%s", profile_username, course_name)
+    logger.info("Checking grade override permission actor=%s course=%s", profile_username, course_name)
 
     student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username)
 
@@ -1701,18 +1740,18 @@ def override_grade(course_name: str) -> ResponseReturnValue:
         try:
             storage_api.get_stored_user_by_username(username)
         except NoResultFound:
-            logger.error("User with username=%s not found in database", sanitize_log_data(username))
+            logger.error("User not found user=%s", sanitize_log_data(username))
             return jsonify(
                 ErrorResponse(error=f"User with username={username} not found").model_dump()
             ), HTTPStatus.NOT_FOUND
 
         storage_api.override_grade(course.course_name, username, new_grade)
 
-        logger.info("Successfully set grade override for user=%s to %d", sanitize_log_data(username), new_grade)
+        logger.info("Grade override set user=%s grade=%d", sanitize_log_data(username), new_grade)
         return jsonify({"success": True}), HTTPStatus.OK
 
     except Exception as e:
-        logger.error("Error overriding grade: %s", str(e))
+        logger.exception("Failed to set grade override course=%s user=%s", course_name, username)
         return jsonify(
             {"success": False, "message": "Internal error when overriding grade"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -1729,7 +1768,7 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
     storage_api = app.storage_api
 
     profile_username = session["manytask"]["username"]
-    logger.info("Clear grade override request by admin=%s for course=%s", profile_username, course_name)
+    logger.info("Checking grade override removal permission actor=%s course=%s", profile_username, course_name)
 
     student_course_admin = storage_api.check_if_course_admin(course.course_name, profile_username)
 
@@ -1751,18 +1790,18 @@ def clear_grade_override(course_name: str) -> ResponseReturnValue:
         try:
             storage_api.get_stored_user_by_username(username)
         except NoResultFound:
-            logger.error("User with username=%s not found in database", sanitize_log_data(username))
+            logger.error("User not found user=%s", sanitize_log_data(username))
             return jsonify(
                 ErrorResponse(error=f"User with username={username} not found").model_dump()
             ), HTTPStatus.NOT_FOUND
 
         storage_api.clear_grade_override(course.course_name, username)
 
-        logger.info("Successfully cleared grade override for user=%s", sanitize_log_data(username))
+        logger.info("Grade override cleared user=%s", sanitize_log_data(username))
         return jsonify({"success": True}), HTTPStatus.OK
 
     except Exception as e:
-        logger.error("Error clearing grade override: %s", str(e))
+        logger.exception("Failed to clear grade override course=%s user=%s", course_name, username)
         return jsonify(
             {"success": False, "message": "Internal error when clearing grade override"}
         ), HTTPStatus.INTERNAL_SERVER_ERROR
@@ -1841,12 +1880,12 @@ def set_course_admin(course_name: str, validated_data: SetCourseAdminRequest) ->
     except NoResultFound:
         target_user = None
     if target_user is None:
-        logger.warning("User %s not found when setting course admin status", sanitize_log_data(target_username))
+        logger.warning("Course admin update failed user=%s reason=user_not_found", sanitize_log_data(target_username))
         return jsonify(ErrorResponse(error=f"User {target_username} not found").model_dump()), HTTPStatus.NOT_FOUND
 
     if not storage_api.check_user_on_course(course_name, target_username):
         logger.warning(
-            "User %s is not enrolled on course %s, cannot change course admin status",
+            "Course admin update failed user=%s course=%s reason=not_enrolled",
             sanitize_log_data(target_username),
             sanitize_log_data(course_name),
         )
@@ -1860,7 +1899,7 @@ def set_course_admin(course_name: str, validated_data: SetCourseAdminRequest) ->
 
     acting_username = "guest" if app.debug else session["manytask"]["username"]
     logger.warning(
-        "User %s %s course admin status for %s in course %s",
+        "Course admin status changed actor=%s action=%s user=%s course=%s",
         sanitize_log_data(acting_username),
         "granted" if validated_data.is_admin else "revoked",
         sanitize_log_data(target_username),
@@ -1898,7 +1937,9 @@ def assign_program_manager(course_name: str, validated_data: AssignProgramManage
     course = __get_course_or_not_found(storage_api, course_name)
     namespace_id = course.namespace_id
     if namespace_id is None:
-        logger.warning("Course %s has no namespace, cannot assign a program manager", sanitize_log_data(course_name))
+        logger.warning(
+            "Program manager assignment failed course=%s reason=no_namespace", sanitize_log_data(course_name)
+        )
         return jsonify(
             ErrorResponse(
                 error="This course does not belong to a namespace, so it has no program managers"
@@ -1911,7 +1952,7 @@ def assign_program_manager(course_name: str, validated_data: AssignProgramManage
         if not storage_api.check_if_instance_admin(acting_username):
             if namespace_id not in storage_api.get_namespace_admin_namespaces(acting_username):
                 logger.warning(
-                    "User %s attempted to assign a program manager in namespace id=%s without admin rights",
+                    "Program manager assignment denied actor=%s namespace_id=%s reason=admin_required",
                     sanitize_log_data(acting_username),
                     namespace_id,
                 )
@@ -1924,7 +1965,7 @@ def assign_program_manager(course_name: str, validated_data: AssignProgramManage
     try:
         namespace, _ = storage_api.get_namespace_by_id(namespace_id, acting_username)
     except (PermissionError, NoResultFound):
-        logger.warning("Namespace id=%s not accessible when assigning a program manager", namespace_id)
+        logger.warning("Program manager assignment denied namespace_id=%s reason=inaccessible", namespace_id)
         return jsonify(ErrorResponse(error="Namespace not found").model_dump()), HTTPStatus.NOT_FOUND
 
     user_on_namespace, error = _add_namespace_role(
@@ -1938,7 +1979,7 @@ def assign_program_manager(course_name: str, validated_data: AssignProgramManage
         return error
 
     logger.info(
-        "User %s assigned %s as program manager of namespace id=%s (course %s)",
+        "Program manager assigned actor=%s user=%s namespace_id=%s course=%s",
         sanitize_log_data(acting_username),
         sanitize_log_data(validated_data.username),
         namespace_id,

@@ -5,6 +5,7 @@ import threading
 from dataclasses import dataclass, field
 
 from manytask.abstract import RmsApi, StorageApi
+from manytask.utils.logging import get_log_context, log_context
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +85,15 @@ def schedule_rms_settings_reconcile(storage_api: StorageApi, rms_api: RmsApi, co
             return False
         _courses_in_progress.add(course_name)
 
+    context = get_log_context() | {"source": "background", "course": course_name}
+
     def _run() -> None:
         try:
-            reconcile_course_rms_settings(storage_api, rms_api, course_name)
+            with log_context(context):
+                try:
+                    reconcile_course_rms_settings(storage_api, rms_api, course_name)
+                except Exception:
+                    logger.exception("Failed to reconcile RMS settings course=%s", course_name)
         finally:
             with _courses_in_progress_lock:
                 _courses_in_progress.discard(course_name)

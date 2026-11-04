@@ -25,7 +25,7 @@ def valid_auth_session(user_session: SessionMixin) -> bool:
         and "username" in user_session["auth"]
         and "user_auth_id" in user_session["auth"]
     )
-    logger.debug("Auth_session_valid=%s", result)
+    logger.debug("Auth session checked valid=%s", result)
     return result
 
 
@@ -38,7 +38,7 @@ def valid_rms_session(user_session: SessionMixin) -> bool:
         and "rms_id" in user_session["rms"]
         and "username" in user_session["rms"]
     )
-    logger.debug("Rms_session_valid=%s", result)
+    logger.debug("RMS session checked valid=%s", result)
     return result
 
 
@@ -51,7 +51,7 @@ def valid_manytask_session(user_session: SessionMixin) -> bool:
         and "user_id" in user_session["manytask"]
         and "username" in user_session["manytask"]
     )
-    logger.debug("Manytask_session_valid=%s", result)
+    logger.debug("Manytask session checked valid=%s", result)
     return result
 
 
@@ -60,7 +60,7 @@ def set_oauth_session(
 ) -> dict[str, Any]:
     """Set oauth creds in session for student"""
 
-    logger.debug("Setting session for user=%s, version=%s", auth_user.username, version)
+    logger.debug("Setting auth session user=%s version=%s", auth_user.username, version)
     result: dict[str, Any] = {
         "username": auth_user.username,
         "user_auth_id": auth_user.id,
@@ -96,16 +96,16 @@ def handle_course_membership(app: CustomFlask, course: Course, username: str) ->
 
     try:
         if app.storage_api.check_user_on_course(course.course_name, username):
-            logger.info("User %s is on course %s", username, course.course_name)
+            logger.info("Course membership found user=%s course=%s", username, course.course_name)
             return True
         else:
-            logger.info("No user %s on course %s", username, course.course_name)
+            logger.info("Course membership not found user=%s course=%s", username, course.course_name)
             return False
     except NoResultFound:
-        logger.info("User %s not in the database", username)
+        logger.info("User not found user=%s", username)
         return False
     except Exception:
-        logger.error("Failed login while working with db", exc_info=True)
+        logger.exception("Failed to check course membership user=%s course=%s", username, course.course_name)
         return False
 
 
@@ -125,7 +125,7 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     try:
         oauth_token = oauth.auth_provider.authorize_access_token()
         token = oauth_token["access_token"]
-        logger.info("OAuth token received")
+        logger.info("OAuth token exchange completed")
 
         auth_user = app.auth_api.get_authenticated_user(token)
     except Exception:
@@ -137,7 +137,7 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
     session.pop("manytask", None)
     session.setdefault("auth", {}).update(set_oauth_session(auth_user, oauth_token))
     session.permanent = True
-    logger.info("Session set for user=%s", auth_user.username)
+    logger.info("Login completed user=%s", auth_user.username)
 
     return __redirect_to_signup_finish()
 
@@ -145,7 +145,7 @@ def handle_oauth_callback(oauth: OAuth, app: CustomFlask) -> Response:
 def get_authenticated_user(oauth: OAuth, app: CustomFlask) -> AuthenticatedUser:
     """Getting student and update session"""
     auth_user = app.auth_api.get_authenticated_user(session["auth"]["access_token"])
-    logger.info("Authenticated user=%s", auth_user.username)
+    logger.info("User authenticated user=%s", auth_user.username)
     session["auth"].update(set_oauth_session(auth_user))
     return auth_user
 
@@ -169,7 +169,7 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
             return f(*args, **kwargs)
 
         if not valid_auth_session(session):
-            logger.error("Failed to verify auth session.", exc_info=True)
+            logger.warning("Auth session rejected reason=invalid_session")
             return redirect_to_login_with_bad_session()
 
         if not app.auth_api.check_user_is_authenticated(
@@ -194,7 +194,7 @@ def requires_auth(f: Callable[..., Any]) -> Callable[..., Any]:
                 )
             )
 
-        logger.debug("Auth check passed")
+        logger.debug("Authentication check passed")
         return f(*args, **kwargs)
 
     return decorated
@@ -240,10 +240,10 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         auth_user: AuthenticatedUser = get_authenticated_user(oauth, app)
         stored_user: StoredUser | None = app.storage_api.get_stored_user_by_auth_id(auth_user.id)
         if stored_user is None:
-            logger.error("User not found in database")
+            logger.warning("Course access denied reason=user_not_found auth_id=%s", auth_user.id)
             abort(HTTPStatus.FORBIDDEN)
         username = stored_user.username
-        logger.info("User %s accessing course=%s", username, course.course_name)
+        logger.info("Checking course access user=%s course=%s", username, course.course_name)
 
         hidden_for_user = [CourseStatus.CREATED, CourseStatus.HIDDEN]
         if course.status in hidden_for_user and not app.storage_api.check_if_course_admin(course.course_name, username):
@@ -256,26 +256,26 @@ def requires_course_access(f: Callable[..., Any]) -> Callable[..., Any]:
         # student repos are created under the RMS-native username. Passing the auth-provider login here
         # would produce a false negative and send a user with an existing repo to recovery.
         if not handle_course_membership(app, course, username):
-            logger.info("User %s is not enrolled in course %s", username, course.course_name)
+            logger.info("Course enrollment required user=%s course=%s", username, course.course_name)
             abort(redirect(url_for("course.create_project", course_name=course.course_name)))
 
         if not app.rms_api.check_project_exists(
             project_name=session["rms"]["username"], project_group=course.gitlab_course_students_group
         ):
-            logger.info("User %s is enrolled but missing a repository in course %s", username, course.course_name)
+            logger.info("Course repository missing user=%s course=%s", username, course.course_name)
             abort(redirect(url_for("course.recover_project", course_name=course.course_name)))
 
         # SourceCraft invitations may still need acceptance; the course page
         # shows the invitation instructions while that is pending.
         if app.app_config.rms != "sourcecraft" and not has_course_repository_access(app, course):
-            logger.info("User %s is enrolled but lacks repository access in course %s", username, course.course_name)
+            logger.info("Course repository access denied user=%s course=%s", username, course.course_name)
             abort(redirect(url_for("course.recover_project", course_name=course.course_name)))
 
         # sync user's data from gitlab to database  TODO: optimize it
         app.storage_api.sync_user_on_course(
             course.course_name, username, app.storage_api.check_if_instance_admin(username)
         )
-        logger.info("Synced user %s on course %s", username, course.course_name)
+        logger.info("Course membership synchronized user=%s course=%s", username, course.course_name)
 
         return f(*args, **kwargs)
 
@@ -322,7 +322,7 @@ def requires_instance_or_namespace_admin(f: Callable[..., Any]) -> Callable[...,
 
         if not is_instance_admin and not is_some_namespace_admin:
             logger.warning(
-                "User %s attempted to access %s without instance admin or namespace admin privileges",
+                "Admin access denied user=%s endpoint=%s required_roles=instance_admin,namespace_admin",
                 username,
                 f.__name__,
             )
@@ -353,7 +353,7 @@ def requires_course_admin(f: Callable[..., Any]) -> Callable[..., Any]:
 
         if not app.storage_api.check_if_course_admin(course_name, username):
             logger.warning(
-                "User %s attempted to access %s for course %s without admin privileges",
+                "Course admin access denied user=%s endpoint=%s course=%s",
                 username,
                 f.__name__,
                 course_name,
@@ -394,7 +394,7 @@ def role_required(required_roles: list[str] | str) -> Callable[[Callable[..., An
 
             if not has_role(username, required_roles, app, course_name, namespace_id):
                 logger.warning(
-                    "User %s attempted to access %s without required role(s): %s",
+                    "Role access denied user=%s endpoint=%s required_roles=%s",
                     username,
                     f.__name__,
                     required_roles,
