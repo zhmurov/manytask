@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pydantic import AnyUrl
 
+from checker.exceptions import PluginExecutionFailed
+
 from .base import PluginABC, PluginOutput
 
 
@@ -18,11 +20,9 @@ class CheckGitlabMergeRequestPlugin(PluginABC):
         search_for_score: bool = False
 
     def _run(self, args: Args, *, verbose: bool = False) -> PluginOutput:  # type: ignore[override]
-        # TODO: implement
-        assert NotImplementedError()
-
-        return PluginOutput(
-            output="",
+        raise PluginExecutionFailed(
+            "GitLab merge request checks are not implemented",
+            output="GitLab merge request checks are unavailable; no score was awarded.",
         )
 
 
@@ -39,18 +39,7 @@ class CollectScoreGitlabMergeRequestPlugin(PluginABC):
         search_for_score: bool = False
 
     def _run(self, args: Args, *, verbose: bool = False) -> PluginOutput:  # type: ignore[override]
-        # TODO: implement
-        assert NotImplementedError()
-
-        # TODO: implement arithmetical operations in score comment
-        # e.g 0.3 + 2*0.7 - 0.2
-        # TODO: auto detect percentage or 0-1 score
-        # e.g. valid:
-        # 0.3 + 2*0.7 - 0.2 = 0.8
-        # 30% + 70% - 20% = 80% (return as 0.8)
-        # 30 + 70 - 20 = 80 (return as 0.8)
-
-        return PluginOutput(
-            output="",
-            percentage=1.0,
+        raise PluginExecutionFailed(
+            "GitLab merge request score collection is not implemented",
+            output="GitLab merge request score collection is unavailable; no score was awarded.",
         )
