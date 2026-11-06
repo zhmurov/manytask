@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -23,7 +24,9 @@ class Exporter:
     TEMPLATE_START_COMMENT = "SOLUTION BEGIN"
     TEMPLATE_END_COMMENT = "SOLUTION END"
     TEMPLATE_REPLACE_COMMENT = "TODO: Your solution"
-    TEMPLATE_COMMENT_REGEX = re.compile(f"{TEMPLATE_START_COMMENT}(.*?){TEMPLATE_END_COMMENT}", re.DOTALL)
+    TEMPLATE_COMMENT_REGEX = re.compile(
+        f"{TEMPLATE_START_COMMENT}(.*?){TEMPLATE_END_COMMENT}", re.DOTALL
+    )
 
     def __init__(
         self,
@@ -50,7 +53,10 @@ class Exporter:
         tasks_by_path: dict[str, FileSystemTask] = {}
         for task in self.course.potential_tasks.values():
             other_task = tasks_by_path.get(task.relative_path)
-            if other_task is not None and other_task.config.structure != task.config.structure:
+            if (
+                other_task is not None
+                and other_task.config.structure != task.config.structure
+            ):
                 raise BadConfig(
                     f"Tasks {other_task.name!r} and {task.name!r} share folder "
                     f"{task.relative_path!r} but have different structure overrides"
@@ -82,7 +88,9 @@ class Exporter:
         for template_file_or_folder in task_folder.glob(f"**/*{self.TEMPLATE_SUFFIX}"):
             has_template_files = True
             # check that all files have original files
-            if not (template_file_or_folder.parent / template_file_or_folder.stem).exists():
+            if not (
+                template_file_or_folder.parent / template_file_or_folder.stem
+            ).exists():
                 raise BadStructure(
                     f"Template file/folder {template_file_or_folder} does not have "
                     f"original file/folder {self.reference_root / template_file_or_folder.stem}"
@@ -91,13 +99,17 @@ class Exporter:
 
         return has_template_files, has_valid_template_files
 
-    def _validate_template_comments_in_file(self, task_name: str, file_path: Path, content: str) -> None:
+    def _validate_template_comments_in_file(
+        self, task_name: str, file_path: Path, content: str
+    ) -> None:
         """Validate template comments in a single file.
 
         Validate using regex and count matches of start and end comments.
         """
         # check have equal num of comments
-        if content.count(self.TEMPLATE_START_COMMENT) != content.count(self.TEMPLATE_END_COMMENT):
+        if content.count(self.TEMPLATE_START_COMMENT) != content.count(
+            self.TEMPLATE_END_COMMENT
+        ):
             raise BadStructure(
                 f"Task {task_name} has invalid template comments in file {file_path}. "
                 f"The number of <{self.TEMPLATE_START_COMMENT}> and "
@@ -106,14 +118,18 @@ class Exporter:
 
         # check between comments no other comment pair
         for match in self.TEMPLATE_COMMENT_REGEX.finditer(content):
-            if self.TEMPLATE_START_COMMENT in match.group(1) or self.TEMPLATE_END_COMMENT in match.group(1):
+            if self.TEMPLATE_START_COMMENT in match.group(
+                1
+            ) or self.TEMPLATE_END_COMMENT in match.group(1):
                 raise BadStructure(
                     f"Task {task_name} has invalid template comments in file {file_path}."
                     f" There is <{self.TEMPLATE_START_COMMENT}> or <{self.TEMPLATE_END_COMMENT}> "
                     f"between valid pair of comments"
                 )
 
-    def _validate_template_comments(self, task_name: str, task_folder: Path) -> tuple[bool, bool]:
+    def _validate_template_comments(
+        self, task_name: str, task_folder: Path
+    ) -> tuple[bool, bool]:
         """Validate template comments in all files in the task folder.
 
         Check all (not binary) files for template comments.
@@ -134,11 +150,16 @@ class Exporter:
             except UnicodeDecodeError:
                 continue
 
-            if self.TEMPLATE_START_COMMENT not in file_content and self.TEMPLATE_END_COMMENT not in file_content:
+            if (
+                self.TEMPLATE_START_COMMENT not in file_content
+                and self.TEMPLATE_END_COMMENT not in file_content
+            ):
                 continue
 
             has_template_comments = True
-            self._validate_template_comments_in_file(task_name, potential_comments_file, file_content)
+            self._validate_template_comments_in_file(
+                task_name, potential_comments_file, file_content
+            )
             has_valid_template_comments = True
 
         return has_template_comments, has_valid_template_comments
@@ -176,7 +197,9 @@ class Exporter:
                 )
         elif template_type == CheckerExportConfig.TemplateType.SEARCH_OR_CREATE:
             if has_template_files and has_template_comments:
-                raise BadStructure(f"Task {task_name} can not use both `.template` file/folder and template comments")
+                raise BadStructure(
+                    f"Task {task_name} can not use both `.template` file/folder and template comments"
+                )
             if not has_valid_template_files and not has_valid_template_comments:
                 raise BadStructure(
                     f"Task {task_name} does not have `.template` file/folder or at least one pair of "
@@ -202,9 +225,11 @@ class Exporter:
             # TODO: check template not public and not private file
 
             task_folder = self.reference_root / task.relative_path
-            has_template_files, has_valid_template_files = self._validate_template_files(task_folder)
-            has_template_comments, has_valid_template_comments = self._validate_template_comments(
-                task.name, task_folder
+            has_template_files, has_valid_template_files = (
+                self._validate_template_files(task_folder)
+            )
+            has_template_comments, has_valid_template_comments = (
+                self._validate_template_comments(task.name, task_folder)
             )
             self._validate_template_type(
                 task.name,
@@ -252,16 +277,19 @@ class Exporter:
                     continue
                 with potential_comments_file.open("r") as f:
                     file_content = f.read().strip()
-                    if file_content.startswith(self.TEMPLATE_START_COMMENT) and file_content.endswith(
-                        self.TEMPLATE_END_COMMENT
-                    ):
+                    if file_content.startswith(
+                        self.TEMPLATE_START_COMMENT
+                    ) and file_content.endswith(self.TEMPLATE_END_COMMENT):
                         exclude_paths.append(potential_comments_file.name)
 
         return exclude_paths
 
     def _unpublished_paths(self) -> list[str]:
         """Group and task folders to skip; a folder shared by tasks is published if any of them is."""
-        published_task_paths = {task.relative_path for task in self.course.get_tasks(enabled=True, started=True)}
+        published_task_paths = {
+            task.relative_path
+            for task in self.course.get_tasks(enabled=True, started=True)
+        }
         return [
             *[group.relative_path for group in self.course.get_groups(enabled=False)],
             *[group.relative_path for group in self.course.get_groups(started=False)],
@@ -302,6 +330,7 @@ class Exporter:
         self,
         target: Path,
     ) -> None:
+        self._validate_student_symlinks()
         if not self.dry_run:
             target.mkdir(parents=True, exist_ok=True)
 
@@ -342,7 +371,10 @@ class Exporter:
         for task in tasks:
             patterns = allowed_patterns[task.name]
             if task.relative_path not in folders:
-                folders[task.relative_path] = (task, None if patterns is None else set(patterns))
+                folders[task.relative_path] = (
+                    task,
+                    None if patterns is None else set(patterns),
+                )
                 continue
             first_task, combined = folders[task.relative_path]
             if patterns is None:
@@ -352,7 +384,9 @@ class Exporter:
 
         for task, combined_patterns in folders.values():
             self.prepare_task_for_testing(
-                target, task, None if combined_patterns is None else sorted(combined_patterns)
+                target,
+                task,
+                None if combined_patterns is None else sorted(combined_patterns),
             )
 
     def prepare_task_for_testing(
@@ -369,6 +403,7 @@ class Exporter:
         if patterns is None or self.dry_run:
             return
 
+        self._validate_student_symlinks()
         task_path = Path(task.relative_path)
         source = self.reference_root / task_path
         destination = target / task_path
@@ -376,8 +411,14 @@ class Exporter:
 
         def ignored_entries(directory: str, names: list[str]) -> set[str]:
             directory_path = Path(directory)
-            config = self._structure_config_for(directory_path.relative_to(self.reference_root))
-            return {name for name in names if self._matches_ignore_patterns(directory_path / name, config)}
+            config = self._structure_config_for(
+                directory_path.relative_to(self.reference_root)
+            )
+            return {
+                name
+                for name in names
+                if self._matches_ignore_patterns(directory_path / name, config)
+            }
 
         if destination.is_dir() and not destination.is_symlink():
             shutil.rmtree(destination)
@@ -409,7 +450,9 @@ class Exporter:
         """Structure rules in effect inside `relative_path`: sub-configs of its ancestors, then its own."""
         config = self.structure_config
         for path in [*reversed(relative_path.parents), relative_path]:
-            config = self._get_sub_config(self.reference_root / path, config, self.reference_root)
+            config = self._get_sub_config(
+                self.reference_root / path, config, self.reference_root
+            )
         return config
 
     @staticmethod
@@ -430,6 +473,7 @@ class Exporter:
         self,
         target: Path,
     ) -> None:
+        self._validate_student_symlinks()
         if not self.dry_run:
             target.mkdir(parents=True, exist_ok=True)
 
@@ -516,7 +560,10 @@ class Exporter:
         ):
             return False
         content = path.read_text()
-        return self.TEMPLATE_START_COMMENT in content and self.TEMPLATE_END_COMMENT in content
+        return (
+            self.TEMPLATE_START_COMMENT in content
+            and self.TEMPLATE_END_COMMENT in content
+        )
 
     def is_task_unchanged(self, task_relative_path: str, patterns: list[str]) -> bool:
         """Check if all student-editable files of a task are identical to the published version.
@@ -528,6 +575,7 @@ class Exporter:
         if not patterns:
             return False
 
+        self._validate_student_symlinks()
         student_task_dir = self.repository_root / task_relative_path
         reference_task_dir = self.reference_root / task_relative_path
 
@@ -548,7 +596,33 @@ class Exporter:
 
         return True
 
-    def _collect_student_files(self, student_task_dir: Path, patterns: list[str]) -> list[Path]:
+    def _validate_student_symlinks(self) -> None:
+        """Validate the static student checkout before any export reads it.
+
+        File symlinks may resolve within the checkout. Directory symlinks are
+        rejected to prevent recursive copies from escaping or following cycles.
+        Git metadata is never part of the exported student tree.
+        """
+        root = self.repository_root.resolve()
+        for directory, folders, files in os.walk(root, followlinks=False):
+            folders[:] = [name for name in folders if name != ".git"]
+            for name in [*folders, *files]:
+                path = Path(directory) / name
+                if not path.is_symlink():
+                    continue
+                relative = path.relative_to(root)
+                try:
+                    target = path.resolve(strict=True)
+                except (OSError, RuntimeError) as error:
+                    raise BadStructure(
+                        f"Invalid student symlink: {relative}"
+                    ) from error
+                if not target.is_relative_to(root) or target.is_dir():
+                    raise BadStructure(f"Unsafe student symlink: {relative}")
+
+    def _collect_student_files(
+        self, student_task_dir: Path, patterns: list[str]
+    ) -> list[Path]:
         """Collect files matched by `patterns` in `student_task_dir`, same convention as `copy_files`."""
         if not student_task_dir.is_dir():
             return []
@@ -557,13 +631,19 @@ class Exporter:
         for pattern in patterns:
             for entry in student_task_dir.glob(pattern):
                 if entry.is_dir():
-                    collected.update(sub.relative_to(student_task_dir) for sub in entry.rglob("*") if sub.is_file())
+                    collected.update(
+                        sub.relative_to(student_task_dir)
+                        for sub in entry.rglob("*")
+                        if sub.is_file()
+                    )
                 elif entry.is_file():
                     collected.add(entry.relative_to(student_task_dir))
 
         return sorted(collected)
 
-    def _exported_content(self, reference_task_dir: Path, relative: Path) -> bytes | None:
+    def _exported_content(
+        self, reference_task_dir: Path, relative: Path
+    ) -> bytes | None:
         """Content the export would publish for `relative` (relative to the task dir), or None."""
         if self.export_config.templates in (
             CheckerExportConfig.TemplateType.SEARCH,
@@ -579,7 +659,10 @@ class Exporter:
             CheckerExportConfig.TemplateType.SEARCH_OR_CREATE,
         ) and self._is_text_file(reference_file):
             content = reference_file.read_text()
-            if self.TEMPLATE_START_COMMENT in content and self.TEMPLATE_END_COMMENT in content:
+            if (
+                self.TEMPLATE_START_COMMENT in content
+                and self.TEMPLATE_END_COMMENT in content
+            ):
                 return self._render_template_comments(content).encode()
 
         if reference_file.exists():
@@ -593,14 +676,18 @@ class Exporter:
         Checks the file itself (`<name>.template` sibling), then each ancestor directory of
         `relative` within the task dir (`<dir>.template/<rest of path>`), closest first.
         """
-        file_template = task_dir / relative.with_name(relative.name + self.TEMPLATE_SUFFIX)
+        file_template = task_dir / relative.with_name(
+            relative.name + self.TEMPLATE_SUFFIX
+        )
         if file_template.is_file():
             return file_template.read_bytes()
 
         for parent in relative.parents:
             if parent == Path("."):
                 continue
-            dir_template = task_dir / parent.parent / (parent.name + self.TEMPLATE_SUFFIX)
+            dir_template = (
+                task_dir / parent.parent / (parent.name + self.TEMPLATE_SUFFIX)
+            )
             candidate = dir_template / relative.relative_to(parent)
             if candidate.is_file():
                 return candidate.read_bytes()
@@ -635,7 +722,9 @@ class Exporter:
             return True, False, False
 
         # ignore if match ignore patterns
-        if config.ignore_patterns and any(path.match(ignore_pattern) for ignore_pattern in config.ignore_patterns):
+        if config.ignore_patterns and any(
+            path.match(ignore_pattern) for ignore_pattern in config.ignore_patterns
+        ):
             if self.verbose:
                 print_info(
                     f"    - Skip <{path.relative_to(global_root)}> because of ignore patterns",
@@ -645,7 +734,10 @@ class Exporter:
 
         # If matches public patterns AND copy_public is False - skip
         is_public = bool(
-            config.public_patterns and any(path.match(public_pattern) for public_pattern in config.public_patterns)
+            config.public_patterns
+            and any(
+                path.match(public_pattern) for public_pattern in config.public_patterns
+            )
         )
         if is_public and not copy_public:
             if self.verbose:
@@ -660,7 +752,10 @@ class Exporter:
         is_private = bool(
             not is_public
             and config.private_patterns
-            and any(path.match(private_pattern) for private_pattern in config.private_patterns)
+            and any(
+                path.match(private_pattern)
+                for private_pattern in config.private_patterns
+            )
         )
         if is_private and not copy_private:
             if self.verbose:
@@ -682,7 +777,9 @@ class Exporter:
 
         # if file is empty file/folder - just do not copy (delete original file due to exclude_paths)
         if fill_templates and is_path_template_file:
-            if path.is_dir() and not any((path_destination / file).exists() for file in path.iterdir()):
+            if path.is_dir() and not any(
+                (path_destination / file).exists() for file in path.iterdir()
+            ):
                 if self.verbose:
                     print_info(
                         f"    - Skip <{path.relative_to(global_root)}> because it is empty folder and "
@@ -701,7 +798,9 @@ class Exporter:
 
         return False, is_public, is_private
 
-    def _get_sub_config(self, path: Path, config: CheckerStructureConfig, global_root: Path) -> CheckerStructureConfig:
+    def _get_sub_config(
+        self, path: Path, config: CheckerStructureConfig, global_root: Path
+    ) -> CheckerStructureConfig:
         """Get sub-config for a directory if exists, otherwise return current config.
 
         If have sub-config - update config with sub-config.
@@ -884,7 +983,10 @@ class Exporter:
             )
             print_info(f"  {config=}", color="white")
 
-        if extra_ignore_paths is not None and str(root.relative_to(global_root)) in extra_ignore_paths:
+        if (
+            extra_ignore_paths is not None
+            and str(root.relative_to(global_root)) in extra_ignore_paths
+        ):
             if self.verbose:
                 print_info(
                     f"    - Skip <{root.relative_to(global_root)}> because of extra ignore paths",
@@ -904,7 +1006,9 @@ class Exporter:
             path_destination = destination / path.relative_to(root)
             is_text_file = self._is_text_file(path)
             is_path_template_file = self._is_template_file(path)
-            is_path_template_comment = self._is_template_comment_file(path, is_text_file)
+            is_path_template_comment = self._is_template_comment_file(
+                path, is_text_file
+            )
 
             should_skip, is_public, is_private = self._should_skip_path(
                 path,

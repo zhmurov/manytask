@@ -8,13 +8,16 @@ import pytest
 from checker.configs import CheckerExportConfig, CheckerStructureConfig, ManytaskConfig
 from checker.course import Course
 from checker.exporter import Exporter
+from checker.exceptions import BadStructure
 
 T_GENERATE_FILE_STRUCTURE = Callable[[dict[str, Any], Path | None], Path]
 
 
 class TestExporterTaskPreparation:
     @pytest.fixture()
-    def task_exporter(self, tmp_path: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE) -> Exporter:
+    def task_exporter(
+        self, tmp_path: Path, generate_file_structure: T_GENERATE_FILE_STRUCTURE
+    ) -> Exporter:
         reference = tmp_path / "reference"
         student = tmp_path / "student"
         generate_file_structure(
@@ -92,7 +95,9 @@ class TestExporterTaskPreparation:
             CheckerExportConfig(destination="https://example.com", templates="search"),
         )
 
-    @pytest.mark.parametrize("selected", [("alpha",), ("beta",), ("alpha", "beta"), ("beta", "alpha")])
+    @pytest.mark.parametrize(
+        "selected", [("alpha",), ("beta",), ("alpha", "beta"), ("beta", "alpha")]
+    )
     def test_prepare_selected_tasks_combines_patterns_in_a_shared_folder(
         self, task_exporter: Exporter, selected: tuple[str, ...]
     ) -> None:
@@ -101,7 +106,9 @@ class TestExporterTaskPreparation:
         tasks = [replace(task, name=name) for name in selected]
         task_exporter.export_for_testing(target)
 
-        task_exporter.prepare_tasks_for_testing(target, tasks, {name: [f"{name}.py", "src"] for name in selected})
+        task_exporter.prepare_tasks_for_testing(
+            target, tasks, {name: [f"{name}.py", "src"] for name in selected}
+        )
 
         folder = target / task.relative_path
         for name in ("alpha", "beta"):
@@ -136,7 +143,9 @@ class TestExporterTaskPreparation:
         assert (folder / "extra.txt").read_text() == "student extra"
         assert (folder / "prepared.txt").read_text() == "keep existing preparation"
 
-    def test_preparation_keeps_patterns_separate_between_folders(self, task_exporter: Exporter) -> None:
+    def test_preparation_keeps_patterns_separate_between_folders(
+        self, task_exporter: Exporter
+    ) -> None:
         task = task_exporter.course.potential_tasks["shared"]
         other = replace(task, name="other", relative_path="group/other")
         for root, content in (
@@ -156,17 +165,25 @@ class TestExporterTaskPreparation:
 
         assert (target / task.relative_path / "alpha.py").read_text() == "student alpha"
         assert (target / task.relative_path / "beta.py").read_text() == "reference beta"
-        assert (target / other.relative_path / "alpha.py").read_text() == "reference other alpha"
-        assert (target / other.relative_path / "beta.py").read_text() == "student other beta"
+        assert (
+            target / other.relative_path / "alpha.py"
+        ).read_text() == "reference other alpha"
+        assert (
+            target / other.relative_path / "beta.py"
+        ).read_text() == "student other beta"
 
-    def test_prepare_task_empty_patterns_uses_reference_verbatim(self, task_exporter: Exporter) -> None:
+    def test_prepare_task_empty_patterns_uses_reference_verbatim(
+        self, task_exporter: Exporter
+    ) -> None:
         task = task_exporter.course.potential_tasks["shared"]
         reference_file = task_exporter.reference_root / task.relative_path / "alpha.py"
         reference_file.write_text("SOLUTION BEGIN\nreference alpha\nSOLUTION END")
 
         task_exporter.prepare_task_for_testing(task_exporter.temporary_dir, task, [])
 
-        assert (task_exporter.temporary_dir / task.relative_path / "alpha.py").read_text() == reference_file.read_text()
+        assert (
+            task_exporter.temporary_dir / task.relative_path / "alpha.py"
+        ).read_text() == reference_file.read_text()
 
     @pytest.mark.parametrize("dry_run, patterns", [(False, None), (True, ["alpha.py"])])
     def test_prepare_task_preserves_legacy_or_dry_run(
@@ -178,19 +195,79 @@ class TestExporterTaskPreparation:
         folder.mkdir(parents=True)
         (folder / "existing.txt").write_text("existing")
 
-        task_exporter.prepare_task_for_testing(task_exporter.temporary_dir, task, patterns)
+        task_exporter.prepare_task_for_testing(
+            task_exporter.temporary_dir, task, patterns
+        )
 
         assert sorted(path.name for path in folder.iterdir()) == ["existing.txt"]
 
-    def test_prepare_task_preserves_deleted_allowed_files(self, task_exporter: Exporter) -> None:
+    def test_prepare_task_preserves_deleted_allowed_files(
+        self, task_exporter: Exporter
+    ) -> None:
         task = task_exporter.course.potential_tasks["shared"]
         student_folder = task_exporter.repository_root / task.relative_path
         (student_folder / "alpha.py").unlink()
         (student_folder / "src/extra.py").unlink()
 
-        task_exporter.prepare_task_for_testing(task_exporter.temporary_dir, task, ["alpha.py", "src"])
+        task_exporter.prepare_task_for_testing(
+            task_exporter.temporary_dir, task, ["alpha.py", "src"]
+        )
 
         folder = task_exporter.temporary_dir / task.relative_path
         assert not (folder / "alpha.py").exists()
         assert not (folder / "src/extra.py").exists()
         assert (folder / "beta.py").read_text() == "reference beta"
+
+    @pytest.mark.parametrize(
+        "operation", ["prepare", "export", "contribution", "unchanged"]
+    )
+    @pytest.mark.parametrize(
+        "link_kind", ["absolute", "relative", "directory", "broken", "cycle"]
+    )
+    def test_rejects_unsafe_student_symlinks_before_copying(
+        self, task_exporter: Exporter, tmp_path: Path, operation: str, link_kind: str
+    ) -> None:
+        task = task_exporter.course.potential_tasks["shared"]
+        student_folder = task_exporter.repository_root / task.relative_path
+        outside = tmp_path / "outside.txt"
+        outside.write_text("synthetic private content")
+        link = student_folder / "alpha.py"
+        link.unlink()
+        if link_kind == "absolute":
+            link.symlink_to(outside)
+        elif link_kind == "relative":
+            link.symlink_to("../../../outside.txt")
+        elif link_kind == "directory":
+            link.symlink_to(tmp_path, target_is_directory=True)
+        elif link_kind == "broken":
+            link.symlink_to(tmp_path / "missing")
+        else:
+            link.symlink_to(student_folder, target_is_directory=True)
+        with pytest.raises(BadStructure, match="student symlink"):
+            if operation == "prepare":
+                task_exporter.prepare_task_for_testing(
+                    task_exporter.temporary_dir, task, ["alpha.py"]
+                )
+            elif operation == "export":
+                task_exporter.export_for_testing(task_exporter.temporary_dir)
+            elif operation == "contribution":
+                task_exporter.export_for_contribution(task_exporter.temporary_dir)
+            else:
+                task_exporter.is_task_unchanged(task.relative_path, ["alpha.py"])
+        assert not (
+            task_exporter.temporary_dir / task.relative_path / "alpha.py"
+        ).exists()
+
+    def test_preserves_internal_student_file_symlinks(
+        self, task_exporter: Exporter
+    ) -> None:
+        task = task_exporter.course.potential_tasks["shared"]
+        folder = task_exporter.repository_root / task.relative_path
+        (folder / "alpha.py").unlink()
+        (folder / "alpha.py").symlink_to("beta.py")
+        task_exporter.prepare_task_for_testing(
+            task_exporter.temporary_dir, task, ["alpha.py"]
+        )
+        assert (
+            task_exporter.temporary_dir / task.relative_path / "alpha.py"
+        ).read_text() == "student beta"
