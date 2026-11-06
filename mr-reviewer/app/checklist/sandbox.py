@@ -1,19 +1,20 @@
 """Sandboxed runner for the ``run:`` checklist step.
 
 Security model:
-* Shallow sparse clone — only the files changed in the MR exist on disk.
-* No GITLAB_TOKEN in the subprocess env — token leaves the bot process only
-  via ``git -c http.extraHeader=...`` and is purged from logged stderr.
-* 60s default timeout. Process is killed if it exceeds the limit.
-* Non-root execution is enforced by the container's USER directive
-  (Dockerfile), not by Python — running ``setuid`` from inside a privileged
-  process is unreliable and pulls in unnecessary complexity.
+* Clone with bot credentials, then copy only the worktree into a disposable
+  non-root Docker container. No host mounts, network, or credentials enter it.
+* Docker enforces resource limits and read-only root storage. Commands write
+  only to bounded tmpfs. Missing Docker/image fails the step closed.
+* Timeout/cancellation removes the container. Public output redacts both the
+  GitLab and course token before truncation.
+
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -24,6 +25,7 @@ from typing import Final
 
 from loguru import logger
 
+from app.checklist.container_runner import DockerCommandRunner
 from app.checklist.step import CheckContext
 from app.hosting import HostingAdapter, MergeRequest
 
@@ -75,7 +77,9 @@ class RunSandbox:
         timeout_sec: float,
         env_whitelist_extra: dict[str, str] | None = None,
         clone_url_builder: CloneUrlBuilder | None = None,
+        runner_image: str = "python:3.14-slim",
     ) -> None:
+        self._runner = DockerCommandRunner(runner_image)
         self._hosting = hosting
         self._gitlab_base_url = gitlab_base_url
         self._gitlab_token = gitlab_token
@@ -107,46 +111,66 @@ class RunSandbox:
                 workdir,
             )
 
+            # Do not copy Git objects, remotes, hooks or configuration into the
+            # runner. Its input snapshot must be readable by the unprivileged UID.
+            shutil.rmtree(workdir / ".git", ignore_errors=True)
+            workdir.chmod(0o755)
             env = self._build_env(mr=mr, ctx=ctx, workdir=workdir)
 
-            # ``start_new_session=True`` puts ``bash`` and every grandchild
-            # into a fresh process group, so we can SIGKILL the whole group on
-            # timeout instead of orphaning sleep/curl/etc. children.
-            proc = await asyncio.create_subprocess_exec(
-                "bash",
-                "-c",
-                command,
-                cwd=str(workdir),
-                env=env,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                start_new_session=True,
-            )
-
-            try:
-                stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=self._timeout_sec)
-            except asyncio.TimeoutError:
-                self._kill_process_group(proc)
-                try:
-                    await proc.wait()
-                except Exception:
-                    pass
-                logger.warning(
-                    "run: step timed out after {}s on mr {}!{}",
-                    self._timeout_sec,
-                    mr.project_path_with_namespace,
-                    mr.mr_iid,
+            async with self._runner.command(workdir, command, env) as execution:
+                # ``start_new_session=True`` puts the Docker CLI and descendants
+                # into a fresh process group, so we can SIGKILL the whole group on
+                # timeout instead of orphaning local transport processes.
+                proc = await asyncio.create_subprocess_exec(
+                    *execution.argv,
+                    cwd=str(workdir),
+                    env=execution.env,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    start_new_session=True,
                 )
-                return SandboxResult(timed_out=True, exit_code=-1, stdout=b"", stderr=b"timeout")
 
-            stdout_truncated = self._redact_secrets(stdout_b[:_STDOUT_LIMIT_BYTES])
-            stderr_redacted = self._redact_secrets(stderr_b)
-            return SandboxResult(
-                timed_out=False,
-                exit_code=proc.returncode if proc.returncode is not None else -1,
-                stdout=stdout_truncated,
-                stderr=stderr_redacted,
-            )
+                try:
+                    stdout_b, stderr_b = await asyncio.wait_for(
+                        self._collect_output(proc, ctx.course_token), timeout=self._timeout_sec
+                    )
+                except asyncio.TimeoutError:
+                    self._kill_process_group(proc)
+                    try:
+                        await proc.wait()
+                    except Exception:
+                        pass
+                    logger.warning(
+                        "run: step timed out after {}s on mr {}!{}",
+                        self._timeout_sec,
+                        mr.project_path_with_namespace,
+                        mr.mr_iid,
+                    )
+                    return SandboxResult(timed_out=True, exit_code=-1, stdout=b"", stderr=b"timeout")
+
+                stdout_truncated = self._redact_secrets(stdout_b, (ctx.course_token,))[:_STDOUT_LIMIT_BYTES]
+                stderr_redacted = self._redact_secrets(stderr_b, (ctx.course_token,))[:_STDOUT_LIMIT_BYTES]
+                return SandboxResult(
+                    timed_out=False,
+                    exit_code=proc.returncode if proc.returncode is not None else -1,
+                    stdout=stdout_truncated,
+                    stderr=stderr_redacted,
+                )
+
+    async def _collect_output(self, proc: asyncio.subprocess.Process, course_token: str) -> tuple[bytes, bytes]:
+        # Retain enough bytes beyond the display boundary to redact a secret
+        # crossing it, and drain the rest without buffering unbounded output.
+        limit = _STDOUT_LIMIT_BYTES + max(len(self._gitlab_token.encode()), len(course_token.encode()))
+
+        async def read(stream: asyncio.StreamReader | None) -> bytes:
+            output = bytearray()
+            if stream is not None:
+                while chunk := await stream.read(16384):
+                    output.extend(chunk[: max(0, limit - len(output))])
+            return bytes(output)
+
+        _, stdout, stderr = await asyncio.gather(proc.wait(), read(proc.stdout), read(proc.stderr))
+        return stdout, stderr
 
     @staticmethod
     def _kill_process_group(proc: asyncio.subprocess.Process) -> None:
@@ -243,25 +267,23 @@ class RunSandbox:
     ) -> dict[str, str]:
         env: dict[str, str] = {
             "PATH": "/usr/local/bin:/usr/bin:/bin",
-            "HOME": str(workdir),
+            "HOME": "/tmp",
             "LANG": "C.UTF-8",
             "LC_ALL": "C.UTF-8",
             "MR_ID": str(mr.mr_iid),
             "MR_URL": mr.web_url,
             "COURSE_NAME": ctx.course_name,
             "MANYTASK_BASE_URL": self._manytask_base_url,
-            "MANYTASK_COURSE_TOKEN": ctx.course_token,
         }
         env.update(self._env_whitelist_extra)
         # Explicit blocklist as defence-in-depth: even if the caller put one of
         # these into env_whitelist_extra, drop them here.
-        for blocked in ("GITLAB_TOKEN", "PRIVATE_TOKEN", "PRIVATE-TOKEN"):
+        for blocked in ("GITLAB_TOKEN", "PRIVATE_TOKEN", "PRIVATE-TOKEN", "MANYTASK_COURSE_TOKEN"):
             env.pop(blocked, None)
         return env
 
-    def _redact_secrets(self, data: bytes) -> bytes:
-        if not data:
-            return data
-        if not self._gitlab_token:
-            return data
-        return data.replace(self._gitlab_token.encode(), _REDACTED_MARKER)
+    def _redact_secrets(self, data: bytes, extra_secrets: tuple[str, ...] = ()) -> bytes:
+        secrets = {secret for secret in (self._gitlab_token, *extra_secrets) if secret}
+        for secret in sorted(secrets, key=len, reverse=True):
+            data = data.replace(secret.encode(), _REDACTED_MARKER)
+        return data

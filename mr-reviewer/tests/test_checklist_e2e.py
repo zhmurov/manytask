@@ -32,6 +32,7 @@ from app.models import (
 from app.models import (
     TaskConfig,
 )
+from tests.test_checklist_sandbox import local_test_transport as local_test_transport
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git binary required for e2e test")
 

@@ -9,16 +9,32 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
 
+from app.checklist.container_runner import DockerCommandRunner, RunnerCommand
 from app.checklist.sandbox import RunSandbox, SandboxCloneError
 from app.checklist.step import CheckContext
 from app.hosting import FileChange, MergeRequest
 from tests._fakes import FakeHostingAdapter
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git binary is required for sandbox tests")
+
+
+@pytest.fixture(autouse=True)
+def local_test_transport(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Exercise cloning/output handling portably. Production always uses Docker;
+    # the real isolation boundary has separate opt-in integration tests.
+    @asynccontextmanager
+    async def command(
+        self: DockerCommandRunner, workdir: Path, command: str, env: dict[str, str]
+    ) -> AsyncIterator[RunnerCommand]:
+        yield RunnerCommand(("bash", "-c", command), env)
+
+    monkeypatch.setattr(DockerCommandRunner, "command", command)
 
 
 def _run(args: list[str], cwd: Path | None = None, env: dict[str, str] | None = None) -> None:
@@ -140,7 +156,8 @@ class TestRunSandbox:
         assert "MR_ID=7" in text
         assert "COURSE_NAME=python-101" in text
         assert "MANYTASK_BASE_URL=http://manytask.test" in text
-        assert "MANYTASK_COURSE_TOKEN=course-token-xxx" in text
+        assert "MANYTASK_COURSE_TOKEN" not in text
+        assert sample_ctx.course_token not in text
 
     async def test_timeout_kills_process(
         self,
@@ -381,3 +398,34 @@ class TestRunSandbox:
 
         assert result.exit_code == 0
         assert b"ok" in result.stdout
+
+
+async def test_course_token_is_redacted_before_output_truncation(
+    sandbox_for_local_remote: RunSandbox,
+    sample_mr_for_sandbox: MergeRequest,
+    sample_ctx: CheckContext,
+) -> None:
+    secret = sample_ctx.course_token
+    command = f"printf '%4090s' ''; printf '%s' '{secret}'; printf '%s' '{secret}' >&2"
+    result = await sandbox_for_local_remote.run(mr=sample_mr_for_sandbox, command=command, ctx=sample_ctx)
+    assert secret.encode() not in result.stdout + result.stderr
+    assert secret[:6].encode() not in result.stdout
+    assert result.stderr == b"***REDACTED***"
+    assert len(result.stdout) <= 4096
+
+
+def test_env_extras_cannot_restore_credentials(
+    sandbox_for_local_remote: RunSandbox,
+    sample_mr_for_sandbox: MergeRequest,
+    sample_ctx: CheckContext,
+    tmp_path: Path,
+) -> None:
+    sandbox_for_local_remote._env_whitelist_extra = {
+        "MANYTASK_COURSE_TOKEN": "synthetic",
+        "GITLAB_TOKEN": "synthetic",
+        "SAFE": "ok",
+    }
+    env = sandbox_for_local_remote._build_env(mr=sample_mr_for_sandbox, ctx=sample_ctx, workdir=tmp_path)
+    assert "MANYTASK_COURSE_TOKEN" not in env
+    assert "GITLAB_TOKEN" not in env
+    assert env["SAFE"] == "ok"

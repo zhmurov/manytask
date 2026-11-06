@@ -250,23 +250,34 @@ the bot edit a forged comment by faking the anchor.
 
 ### `run:` sandbox
 
-- Working directory: shallow sparse clone of the MR's source branch, with
-  sparse-checkout restricted to files changed in the MR. A 5 MiB student
-  task occupies under 100 MiB on disk because the rest of the repo is
-  fetched as blobless references.
-- Environment: explicit whitelist of `MR_ID`, `MR_URL`, `COURSE_NAME`,
-  `MANYTASK_COURSE_TOKEN`, `PATH`, `HOME`, `LANG`. **No `GITLAB_TOKEN`** —
-  course scripts cannot exfiltrate the bot's GitLab credentials.
-- Timeout: `BOT_RUN_STEP_TIMEOUT_SEC` (default 60s). Process is killed and
-  the step reports a failure if it overruns.
-- Uid: in MVP the `run:` step executes inside the same container as the
-  rest of the bot, under the container's non-root `botuser` (uid 10001).
-  This means **course `run:` commands are trusted code** — a malicious
-  course could read other courses' configs from memory. Run only courses
-  whose teaching staff you trust. A future ticket will move `run:` into
-  per-MR ephemeral pods for full isolation.
-- Stdout: truncated to the first 4 KiB before being placed into the
-  checklist comment. Stderr: logged with the GitLab token redacted.
+Commands run in disposable Docker containers, never in the bot process. The bot
+clones the MR and copies its worktree (without `.git`) into the container. No host
+paths or Docker sockets are mounted into it. The command runs as UID 65534 with
+no network, no Linux capabilities, no privilege escalation, and a read-only root
+filesystem. It gets a writable 128 MiB tmpfs, 256 MiB RAM, one CPU, and 64 PIDs.
+Only non-secret MR/course metadata is passed in; course and GitLab tokens are
+excluded. Both tokens are redacted from output before the 4 KiB display limit.
+Containers and their anonymous input volumes are force-removed on completion,
+failure, timeout, and cancellation.
+
+Deployment requires Docker CLI access to a **dedicated runner daemon**, configured
+with the standard `DOCKER_HOST` and, for remote TLS, Docker TLS settings. Do not
+expose an unrelated production host's Docker socket to the bot. The daemon socket
+and credentials stay with the bot; they are never passed into command containers.
+Copying input with `docker cp` supports a remote daemon without shared host paths.
+
+Pre-pull an operator-approved image on that daemon (default `python:3.14-slim`),
+and set `RUN_STEP_IMAGE` to its tag or digest. Custom images need `/bin/bash`,
+`cp`, and `mkdir`, plus the tools required by the course. Pin a digest for
+reproducible deployments. Images must not contain credentials. Runtime pulls
+are disabled: missing Docker or an unavailable image makes the step fail, with
+no host-execution fallback. `RUN_STEP_TIMEOUT_SEC` controls command execution;
+runner setup/cleanup operations each have a 30-second timeout. Monitor containers
+with the `manytask.runner=true` label after daemon outages or abrupt bot termination.
+
+The regular test suite uses a local test-only command transport. Run the real
+isolation checks explicitly with `RUN_DOCKER_TESTS=1 .venv/bin/python -m pytest
+ tests/test_checklist_docker_integration.py --no-cov` after pre-pulling the image.
 
 The bot also applies labels:
 

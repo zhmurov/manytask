@@ -68,6 +68,11 @@ class Settings(BaseSettings):
         description="Label set when at least one checklist step failed",
         alias="BOT_LABEL_FAIL",
     )
+    run_step_image: str = Field(
+        default="python:3.14-slim",
+        description="Operator-managed Docker image for isolated run steps (must be pre-pulled)",
+        alias="RUN_STEP_IMAGE",
+    )
     run_step_timeout_sec: float = Field(
         default=60.0,
         description="Hard timeout for the run: checklist step",

@@ -23,6 +23,9 @@ RUN apt-get update \
     && apt-get install --no-install-recommends -y git ca-certificates bash curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Use a current standalone Docker client; the runner daemon is external.
+COPY --from=docker:28-cli /usr/local/bin/docker /usr/local/bin/docker
+
 # Non-root user — the entire bot process plus every subprocess it spawns
 # runs as this uid. Matches the trust model documented in README.
 RUN useradd --create-home --uid 10001 botuser

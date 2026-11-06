@@ -70,6 +70,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         gitlab_token=settings.gitlab_token,
         manytask_base_url=settings.manytask_base_url,
         timeout_sec=settings.run_step_timeout_sec,
+        runner_image=settings.run_step_image,
     )
     runner = ChecklistRunner(hosting=hosting_adapter, sandbox=sandbox, metrics=metrics)
     publisher = ChecklistPublisher(
