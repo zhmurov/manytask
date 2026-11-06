@@ -324,6 +324,8 @@ class StorageApi(ABC):
         username: str,
         role: str,
         assigned_by_username: str,
+        *,
+        sync_rms: Callable[[str], None] | None = None,
     ) -> Any: ...
 
     @abstractmethod
@@ -351,10 +353,14 @@ class StorageApi(ABC):
     def get_namespace_courses(self, namespace_id: int) -> list[dict[str, Any]]: ...
 
     @abstractmethod
-    def remove_user_from_namespace(self, namespace_id: int, user_id: int) -> tuple[str, str]: ...
+    def remove_user_from_namespace(
+        self, namespace_id: int, user_id: int, *, sync_rms: Callable[[str], None] | None = None
+    ) -> tuple[str, str]: ...
 
     @abstractmethod
-    def update_user_role_in_namespace(self, namespace_id: int, user_id: int, new_role: str) -> tuple[str, str, str]: ...
+    def update_user_role_in_namespace(
+        self, namespace_id: int, user_id: int, new_role: str, *, sync_rms: Callable[[str], None] | None = None
+    ) -> tuple[str, str, str]: ...
 
     @abstractmethod
     def get_course_id_by_name(self, course_name: str) -> int | None: ...

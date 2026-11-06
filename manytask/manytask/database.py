@@ -2210,12 +2210,39 @@ class DataBaseApi(StorageApi):
                 logger.warning("User %s has no access to namespace id=%s", username, namespace_id)
                 raise PermissionError(f"Access denied to namespace {namespace_id}")
 
+    @staticmethod
+    def _lock_namespace_membership(session: Session, namespace_id: int, user_id: int) -> models.UserOnNamespace:
+        return (
+            session.query(models.UserOnNamespace)
+            .filter_by(user_id=user_id, namespace_id=namespace_id)
+            .with_for_update()
+            .one()
+        )
+
+    @staticmethod
+    def _commit_namespace_membership(session: Session, rms_id: str, sync_rms: Callable[[str], None] | None) -> None:
+        """Validate/lock local changes before an idempotent RMS call and commit.
+
+        An RMS failure leaves the database unchanged so the same request can be
+        retried, including when the provider applied a change but lost its reply.
+        """
+        try:
+            session.flush()
+            if sync_rms is not None:
+                sync_rms(rms_id)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+
     def add_user_to_namespace(
         self,
         namespace_id: int,
         username: str,
         role: str,
         assigned_by_username: str,
+        *,
+        sync_rms: Callable[[str], None] | None = None,
     ) -> models.UserOnNamespace:
         """Add a user to a namespace with a specific role.
 
@@ -2276,7 +2303,7 @@ class DataBaseApi(StorageApi):
             session.add(user_on_namespace)
 
             try:
-                session.commit()
+                self._commit_namespace_membership(session, user.rms_id, sync_rms)
 
                 session.refresh(user_on_namespace)
 
@@ -2330,7 +2357,9 @@ class DataBaseApi(StorageApi):
 
             return user_role_pairs
 
-    def remove_user_from_namespace(self, namespace_id: int, user_id: int) -> tuple[str, str]:
+    def remove_user_from_namespace(
+        self, namespace_id: int, user_id: int, *, sync_rms: Callable[[str], None] | None = None
+    ) -> tuple[str, str]:
         """Remove a user from a namespace.
 
         :param namespace_id: ID of the namespace
@@ -2342,12 +2371,7 @@ class DataBaseApi(StorageApi):
             logger.info("Removing user_id=%s from namespace_id=%s", user_id, namespace_id)
 
             try:
-                user_on_namespace = self._get(
-                    session,
-                    models.UserOnNamespace,
-                    user_id=user_id,
-                    namespace_id=namespace_id,
-                )
+                user_on_namespace = self._lock_namespace_membership(session, namespace_id, user_id)
 
                 role = user_on_namespace.role.value
                 user = self._get(session, models.User, id=user_id)
@@ -2355,7 +2379,7 @@ class DataBaseApi(StorageApi):
                 username = user.username
 
                 session.delete(user_on_namespace)
-                session.commit()
+                self._commit_namespace_membership(session, rms_id, sync_rms)
 
                 logger.info(
                     "Successfully removed user %s (id=%s, rms_id=%s) with role %s from namespace_id=%s",
@@ -2372,7 +2396,9 @@ class DataBaseApi(StorageApi):
                 logger.warning("User id=%s not found in namespace_id=%s", user_id, namespace_id)
                 raise NoResultFound(f"User {user_id} is not in namespace {namespace_id}")
 
-    def update_user_role_in_namespace(self, namespace_id: int, user_id: int, new_role: str) -> tuple[str, str, str]:
+    def update_user_role_in_namespace(
+        self, namespace_id: int, user_id: int, new_role: str, *, sync_rms: Callable[[str], None] | None = None
+    ) -> tuple[str, str, str]:
         """Update a user's role in a namespace.
 
         If new_role is 'student', removes the user from the namespace entirely.
@@ -2394,12 +2420,7 @@ class DataBaseApi(StorageApi):
             )
 
             try:
-                user_on_namespace = self._get(
-                    session,
-                    models.UserOnNamespace,
-                    user_id=user_id,
-                    namespace_id=namespace_id,
-                )
+                user_on_namespace = self._lock_namespace_membership(session, namespace_id, user_id)
 
                 old_role = user_on_namespace.role.value
                 user = self._get(session, models.User, id=user_id)
@@ -2409,7 +2430,7 @@ class DataBaseApi(StorageApi):
                 if new_role == "student":
                     # Remove from namespace entirely
                     session.delete(user_on_namespace)
-                    session.commit()
+                    self._commit_namespace_membership(session, rms_id, sync_rms)
                     logger.info(
                         "Demoted user %s (id=%s, rms_id=%s) from %s to student in namespace_id=%s",
                         username,

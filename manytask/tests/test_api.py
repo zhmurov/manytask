@@ -1755,7 +1755,16 @@ def test_assign_program_manager_allowed_for_namespace_admin(app, authenticated_c
     user_on_namespace.namespace_id = 1
     added = []
 
-    def add_user_to_namespace(*, namespace_id, username, role, assigned_by_username):
+    def add_user_to_namespace(
+        *,
+        namespace_id: int,
+        username: str,
+        role: str,
+        assigned_by_username: str,
+        sync_rms: Callable[[str], None] | None = None,
+    ) -> MagicMock:
+        if sync_rms is not None:
+            sync_rms("2")
         added.append((namespace_id, username, role))
         return user_on_namespace
 

@@ -1520,3 +1520,112 @@ def test_remove_user_from_namespace_nonexistent_namespace(client_with_db, mock_s
     data = json.loads(response.data)
     assert "error" in data
     assert data["error"] == "Access denied"
+
+
+@pytest.fixture
+def membership_client(client_with_db: FlaskClient, session: Session) -> FlaskClient:
+    # Give each storage call its own transaction, as production does, while
+    # retaining the outer test transaction and its seeded users on rollback.
+    client_with_db.application.storage_api._session_create = lambda: Session(
+        bind=session.get_bind(), join_transaction_mode="create_savepoint", expire_on_commit=False
+    )
+    return client_with_db
+
+
+@pytest.mark.parametrize("after_apply", [False, True])
+def test_namespace_add_failure_can_be_retried(
+    membership_client: FlaskClient,
+    session: Session,
+    mock_session_admin: dict[str, Any],
+    mocker: MockerFixture,
+    after_apply: bool,
+) -> None:
+    set_session(membership_client, mock_session_admin)
+    namespace_id = create_namespace(membership_client, name="Sync", slug="sync-add")["id"]
+    user = add_test_user(
+        session,
+        membership_client.application,
+        username="sync_user",
+        first_name="Sync",
+        last_name="User",
+        rms_id="901",
+        auth_id=901,
+    )
+    user_id = user.id
+    rms = membership_client.application.rms_api
+    original = rms.add_user_to_namespace_group
+
+    def fail(gitlab_group_id: int, rms_id: str) -> None:
+        if after_apply:
+            original(gitlab_group_id, rms_id)
+        raise RuntimeError("synthetic provider failure")
+
+    call = mocker.patch.object(rms, "add_user_to_namespace_group", side_effect=fail)
+    url = f"/api/namespaces/{namespace_id}/users"
+    payload = {"username": user.username, "role": "program_manager"}
+    assert post_json(membership_client, url, payload).status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert session.query(UserOnNamespace).filter_by(user_id=user_id, namespace_id=namespace_id).first() is None
+    call.side_effect = original
+    assert post_json(membership_client, url, payload).status_code == HTTPStatus.CREATED
+    assert session.query(UserOnNamespace).filter_by(user_id=user_id, namespace_id=namespace_id).one()
+
+
+@pytest.mark.parametrize("method", ["delete", "patch"])
+@pytest.mark.parametrize("after_apply", [False, True])
+def test_namespace_revocation_failure_preserves_retryable_membership(
+    membership_client: FlaskClient,
+    session: Session,
+    mock_session_admin: dict[str, Any],
+    mocker: MockerFixture,
+    method: str,
+    after_apply: bool,
+) -> None:
+    set_session(membership_client, mock_session_admin)
+    namespace_id = create_namespace(membership_client, name="Sync", slug="sync-remove")["id"]
+    user = add_test_user(
+        session,
+        membership_client.application,
+        username="sync_user",
+        first_name="Sync",
+        last_name="User",
+        rms_id="902",
+        auth_id=902,
+    )
+    user_id = user.id
+    base = f"/api/namespaces/{namespace_id}/users"
+    assert (
+        post_json(membership_client, base, {"username": user.username, "role": "program_manager"}).status_code
+        == HTTPStatus.CREATED
+    )
+    rms = membership_client.application.rms_api
+    original = rms.remove_user_from_namespace_group
+
+    def fail(gitlab_group_id: int, rms_id: str) -> None:
+        if after_apply:
+            original(gitlab_group_id, rms_id)
+        raise RuntimeError("synthetic provider failure")
+
+    call = mocker.patch.object(rms, "remove_user_from_namespace_group", side_effect=fail)
+    url = f"{base}/{user_id}"
+    response = membership_client.open(url, method=method.upper(), json={"role": "student"})
+    assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+    assert session.query(UserOnNamespace).filter_by(user_id=user_id, namespace_id=namespace_id).one()
+    call.side_effect = original
+    response = membership_client.open(url, method=method.upper(), json={"role": "student"})
+    assert response.status_code == (HTTPStatus.NO_CONTENT if method == "delete" else HTTPStatus.OK)
+    assert session.query(UserOnNamespace).filter_by(user_id=user_id, namespace_id=namespace_id).first() is None
+
+
+def test_nonmember_demotion_does_not_revoke_rms_access(
+    membership_client: FlaskClient,
+    session: Session,
+    mock_session_admin: dict[str, Any],
+    mocker: MockerFixture,
+) -> None:
+    set_session(membership_client, mock_session_admin)
+    namespace_id = create_namespace(membership_client, name="Sync", slug="sync-nonmember")["id"]
+    user = get_user(session, "regular_user")
+    revoke = mocker.patch.object(membership_client.application.rms_api, "remove_user_from_namespace_group")
+    response = membership_client.patch(f"/api/namespaces/{namespace_id}/users/{user.id}", json={"role": "student"})
+    assert response.status_code == HTTPStatus.NOT_FOUND
+    revoke.assert_not_called()

@@ -110,6 +110,9 @@ def _add_namespace_role(
             username=username,
             role=role,
             assigned_by_username=assigned_by_username,
+            sync_rms=lambda rms_id: rms_api.add_user_to_namespace_group(
+                gitlab_group_id=namespace.gitlab_group_id, rms_id=rms_id
+            ),
         )
     except NoResultFound as e:
         logger.warning("User %s not registered in manytask: %s", sanitize_log_data(username), str(e))
@@ -131,23 +134,10 @@ def _add_namespace_role(
         logger.error("Invalid role %s: %s", role, str(e))
         return None, (jsonify(ErrorResponse(error=str(e)).model_dump()), HTTPStatus.BAD_REQUEST)
 
-    # The RMS group membership is added only after the database row exists.
-    # TODO: откатить добавление в локальную БД, если добавление в группу RMS не удалось
-    try:
-        stored_user = storage_api.get_stored_user_by_username(username)
-        rms_api.add_user_to_namespace_group(
-            gitlab_group_id=namespace.gitlab_group_id,
-            rms_id=stored_user.rms_id,
-        )
-        logger.info(
-            "Added RMS user id=%s to group id=%s",
-            stored_user.rms_id,
-            namespace.gitlab_group_id,
-        )
-    except Exception as e:
-        logger.error("Failed to add user %s to RMS group: %s", sanitize_log_data(username), str(e))
+    except Exception:
+        logger.exception("Failed to synchronize namespace membership for %s", sanitize_log_data(username))
         return None, (
-            jsonify(ErrorResponse(error="Failed to add user to GitLab group").model_dump()),
+            jsonify(ErrorResponse(error="Failed to synchronize namespace membership; please retry").model_dump()),
             HTTPStatus.INTERNAL_SERVER_ERROR,
         )
 
@@ -1279,7 +1269,13 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
 
     try:
         try:
-            role, removed_rms_id = storage_api.remove_user_from_namespace(namespace_id, user_id)
+            role, removed_rms_id = storage_api.remove_user_from_namespace(
+                namespace_id,
+                user_id,
+                sync_rms=lambda rms_id: rms_api.remove_user_from_namespace_group(
+                    gitlab_group_id=namespace.gitlab_group_id, rms_id=rms_id
+                ),
+            )
             logger.info(
                 "User %s removed user_id=%s (rms_id=%s, role=%s) from namespace id=%s in database",
                 username,
@@ -1291,22 +1287,6 @@ def remove_user_from_namespace(namespace_id: int, user_id: int, namespace: Any) 
         except NoResultFound:
             logger.warning("User id=%s not found in namespace id=%s", user_id, namespace_id)
             return jsonify(ErrorResponse(error="User not found in namespace").model_dump()), HTTPStatus.NOT_FOUND
-
-        try:
-            rms_api.remove_user_from_namespace_group(gitlab_group_id=namespace.gitlab_group_id, rms_id=removed_rms_id)
-            logger.info(
-                "User %s removed user rms_id=%s from GitLab group id=%s",
-                username,
-                removed_rms_id,
-                namespace.gitlab_group_id,
-            )
-        except Exception as e:
-            logger.error(
-                "Failed to remove user rms_id=%s from GitLab group id=%s: %s",
-                removed_rms_id,
-                namespace.gitlab_group_id,
-                str(e),
-            )
 
         logger.info(
             "User %s successfully removed user_id=%s from namespace id=%s",
@@ -1364,41 +1344,16 @@ def update_user_role_in_namespace(
     new_role = validated_data.role
 
     try:
-        # First, get the user's rms_id before making any changes
-        try:
-            stored_user = storage_api.get_stored_user_by_db_id(user_id)
-            if stored_user is None:
-                return jsonify(ErrorResponse(error="User not found").model_dump()), HTTPStatus.NOT_FOUND
-            rms_id = stored_user.rms_id
-        except Exception as e:
-            logger.error("Failed to get user info for user_id=%s: %s", user_id, str(e))
-            return jsonify(ErrorResponse(error="User not found").model_dump()), HTTPStatus.NOT_FOUND
-
-        # If demoting to student, we need to remove from GitLab first
-        # If GitLab fails, we don't want to change the database
-        if new_role == "student":
-            try:
-                rms_api.remove_user_from_namespace_group(gitlab_group_id=namespace.gitlab_group_id, rms_id=rms_id)
-                logger.info(
-                    "User %s removed user rms_id=%s from GitLab group id=%s (role change to student)",
-                    username,
-                    rms_id,
-                    namespace.gitlab_group_id,
-                )
-            except Exception as e:
-                logger.error(
-                    "Failed to remove user rms_id=%s from GitLab group id=%s: %s",
-                    rms_id,
-                    namespace.gitlab_group_id,
-                    str(e),
-                )
-                return jsonify(
-                    ErrorResponse(error=f"Failed to remove user from GitLab group: {str(e)}").model_dump()
-                ), HTTPStatus.INTERNAL_SERVER_ERROR
-
         # Now update the database
         try:
-            old_role, actual_new_role, _ = storage_api.update_user_role_in_namespace(namespace_id, user_id, new_role)
+            old_role, actual_new_role, _ = storage_api.update_user_role_in_namespace(
+                namespace_id,
+                user_id,
+                new_role,
+                sync_rms=lambda rms_id: rms_api.remove_user_from_namespace_group(
+                    gitlab_group_id=namespace.gitlab_group_id, rms_id=rms_id
+                ),
+            )
             logger.info(
                 "User %s updated role for user_id=%s in namespace id=%s: %s -> %s",
                 username,
