@@ -26,11 +26,15 @@ class ManytaskPlugin(PluginABC):
     name = "report_score_manytask"
 
     class Args(PluginABC.Args):
-        origin: Optional[str] = None  # as pydantic does not support | in older python versions
+        origin: Optional[str] = (
+            None  # as pydantic does not support | in older python versions
+        )
         patterns: list[str] = ["*"]
         username: str
         task_name: str
-        score: int | float | None  # TODO: validate score is in [0, 1] (bonus score is higher than 1)
+        score: (
+            int | float | None
+        )  # TODO: validate score is in [0, 1] (bonus score is higher than 1)
         report_url: AnyUrl
         report_token: str
         check_deadline: bool
@@ -41,7 +45,9 @@ class ManytaskPlugin(PluginABC):
         output: list[str] = []
 
         if not args.send_time.tzinfo:
-            output.append("Warning: No timezone provided for send_time, possible time miscalculations")
+            output.append(
+                "Warning: No timezone provided for send_time, possible time miscalculations"
+            )
         try:
             send_time_formatted = args.send_time.strftime(self.DEFAULT_TIME_FORMAT)
         except ValueError as e:
@@ -83,13 +89,31 @@ class ManytaskPlugin(PluginABC):
         data: dict[str, Any],
         files: dict[str, tuple[str, IO[bytes]]] | None,
     ) -> requests.Response:
-        retry_strategy = urllib3.Retry(total=3, backoff_factor=1, status_forcelist=[408, 500, 502, 503, 504])
+        # A lowering write can overwrite a concurrent newer grade if replayed
+        # after an ambiguous response. Retry only connection establishment for
+        # those writes. Default max-score updates are safe to retry on 5xx.
+        retry_strategy = urllib3.Retry(
+            total=3,
+            connect=3,
+            read=0,
+            status=0 if data.get("allow_reduction", False) else 3,
+            other=0,
+            allowed_methods=frozenset({"POST"}),
+            backoff_factor=1,
+            status_forcelist=[]
+            if data.get("allow_reduction", False)
+            else [408, 500, 502, 503, 504],
+            raise_on_status=False,
+            respect_retry_after_header=False,
+        )
         adapter = requests.adapters.HTTPAdapter(max_retries=retry_strategy)
-        session = requests.Session()
-        session.mount("https://", adapter)
-        session.mount("http://", adapter)
         try:
-            response = session.post(url=f"{report_url}", data=data, files=files)
+            with requests.Session() as session:
+                session.mount("https://", adapter)
+                session.mount("http://", adapter)
+                response = session.post(
+                    url=f"{report_url}", data=data, files=files, timeout=(5, 30)
+                )
         except requests.RequestException as e:
             raise PluginExecutionFailed(
                 "Unable to send score to Manytask",
@@ -108,7 +132,9 @@ class ManytaskPlugin(PluginABC):
         return response
 
     @staticmethod
-    def _collect_files_to_send(origin: str, patterns: list[str]) -> dict[str, tuple[str, IO[bytes]]]:
+    def _collect_files_to_send(
+        origin: str, patterns: list[str]
+    ) -> dict[str, tuple[str, IO[bytes]]]:
         source_dir = Path(origin)
         return {
             path.name: (str(path.relative_to(source_dir)), open(path, "rb"))
