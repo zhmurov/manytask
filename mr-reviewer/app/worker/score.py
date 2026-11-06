@@ -20,7 +20,8 @@ class ScoreProcessor:
     Idempotency: a comment is marked processed only on a terminal outcome
     (reported, manytask rejected it as 4xx, or author is not an admin). Transient
     manytask outages and a forbidden course token (403) leave the comment
-    unprocessed so the next cycle retries once manytask/token recovers.
+    unprocessed so the next cycle retries once manytask/token recovers. Later
+    comments wait behind that failure so an older retry cannot overwrite them.
     """
 
     def __init__(
@@ -46,7 +47,7 @@ class ScoreProcessor:
     ) -> None:
         mr_id = str(mr.mr_iid)
         comments = await self._hosting.get_comments(mr)
-        for comment in comments:
+        for comment in sorted(comments, key=lambda item: (item.created_at, item.id)):
             if comment.author_username == self._bot_username:
                 continue
             comment_id = str(comment.id)
@@ -70,7 +71,7 @@ class ScoreProcessor:
                     mr.project_path_with_namespace,
                     mr.mr_iid,
                 )
-                continue
+                return
             except ManytaskTokenForbidden:
                 # Course token misconfigured — operator must fix it. Leave the
                 # comment unprocessed so the score is reported once the token works.
@@ -78,7 +79,7 @@ class ScoreProcessor:
                     "manytask rejected course token (403) on is_admin for course {}; fix the course token — will retry",
                     ctx.course_name,
                 )
-                continue
+                return
 
             if not author_is_admin:
                 logger.info(
@@ -92,8 +93,8 @@ class ScoreProcessor:
 
             # If the per-MR timeout fires between a successful report and the
             # mark_processed below, the next cycle re-reports the same score.
-            # report_score uses allow_reduction=True, so a duplicate is idempotent
-            # (same score, never reduced) — at-least-once is acceptable here.
+            # Do not advance past an uncertain report: allow_reduction=True
+            # makes replaying an older value after a newer one unsafe.
             try:
                 final = await self._manytask.report_score(
                     ctx.course_name,
@@ -121,7 +122,7 @@ class ScoreProcessor:
                     mr.author_username,
                     task_name,
                 )
-                continue
+                return
             except ManytaskTokenForbidden:
                 # Course token misconfigured — operator must fix it. Leave the
                 # comment unprocessed so the score is reported once the token works.
@@ -130,7 +131,7 @@ class ScoreProcessor:
                     "fix the course token — will retry",
                     ctx.course_name,
                 )
-                continue
+                return
 
             logger.info(
                 "reported score {} (final={}) for {} task {} from admin {}",

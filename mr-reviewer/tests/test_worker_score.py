@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fakeredis.aioredis import FakeRedis
@@ -191,3 +192,36 @@ async def test_non_score_comment_left_unprocessed(store: ProcessedCommentStore) 
 
     assert manytask.reported == []
     assert await store.is_processed("python-101", "7", "10") is False
+
+
+@pytest.mark.parametrize("operation", ["is_admin", "report_score"])
+@pytest.mark.parametrize("failure", [ManytaskUnavailable, ManytaskTokenForbidden])
+@pytest.mark.parametrize("scores", [(10, 90), (90, 10)])
+async def test_retry_preserves_comment_order(
+    store: ProcessedCommentStore,
+    operation: str,
+    failure: type[Exception],
+    scores: tuple[int, int],
+) -> None:
+    hosting = FakeHostingAdapter()
+    # Providers need not return chronological order; tied timestamps use note IDs.
+    hosting.notes = [
+        _comment(11, "teacher", f"Score: {scores[1]}"),
+        _comment(10, "teacher", f"Score: {scores[0]}"),
+    ]
+    manytask = FakeManytaskClient()
+    manytask.admins.add("teacher")
+    proc = _processor(hosting, manytask, store)
+    ctx = CheckContext(course_name="python-101", course_token="synthetic-token")
+    compiled = compile_score_pattern("Score: {score}")
+
+    with patch.object(manytask, operation, new=AsyncMock(side_effect=failure("temporary"))) as failing:
+        await proc.process(ctx=ctx, mr=_mr(), task_name="task-1", compiled=compiled)
+        assert failing.await_count == 1
+    assert manytask.reported == []
+    assert not await store.is_processed(ctx.course_name, "7", "11")
+
+    await proc.process(ctx=ctx, mr=_mr(), task_name="task-1", compiled=compiled)
+    await proc.process(ctx=ctx, mr=_mr(), task_name="task-1", compiled=compiled)
+    assert [call["score"] for call in manytask.reported] == list(scores)
+    assert all(call["allow_reduction"] is True for call in manytask.reported)
