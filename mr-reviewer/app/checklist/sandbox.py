@@ -125,6 +125,10 @@ class RunSandbox:
 
             try:
                 stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=self._timeout_sec)
+            except asyncio.CancelledError:
+                self._kill_process_group(proc)
+                await proc.communicate()
+                raise
             except asyncio.TimeoutError:
                 self._kill_process_group(proc)
                 try:
