@@ -81,6 +81,12 @@ A solution passing public tests but failing one of three hidden tests must earn 
 the correct solution must earn 100/100. The test waits for the pipelines for the exact pushed
 commits, reads persisted scores through the Manytask API, and checks the student's course HTML.
 
+The fixture uses `changes_detection: commit_message` and adds two independent Python tasks,
+`push_first` and `push_second`. After the original score checks, it commits their solutions
+separately, adds an unrelated final commit, and pushes all three together. Both tasks must
+earn 100/100 in the final commit's pipeline; intermediate commits must have no pipelines.
+This guards against reading only `HEAD`'s commit message when selecting submissions.
+
 The launcher prints its private artifact directory under `manytask/.tmp/e2e/`. It retains stage evidence and
 redacted job/service logs, deletes generated credentials, and destroys its Compose project
 and volumes on success or failure by default. `e2e/run.py --keep-on-failure` is an explicit

@@ -164,6 +164,8 @@ class Lifecycle:
         releaser = yaml.safe_load(self.file(project, ".releaser-ci.yml"))
         checker = yaml.safe_load(self.file(project, ".checker.yml"))
         schedule = yaml.safe_load(self.file(project, ".manytask.yml"))
+        checker["testing"]["changes_detection"] = "commit_message"
+        self.evidence["changes_detection"] = "commit_message"
         wheel = next((self.directory / "wheels").glob("*.whl"))
         spec = f".e2e-checker/{wheel.name}"
         self.evidence["checker_wheel_sha256"] = hashlib.sha256(wheel.read_bytes()).hexdigest()
@@ -198,6 +200,7 @@ class Lifecycle:
         ]
         now = datetime.now(timezone.utc)
         group = schedule["deadlines"]["schedule"][0]
+        group["tasks"].extend({"task": name, "score": FULL_SCORE} for name in ["push_first", "push_second"])
         group["start"] = (now - timedelta(days=1)).strftime("%Y-%m-%d %H:%M")
         group["end"] = (now + timedelta(days=7)).strftime("%Y-%m-%d %H:%M")
         base = self.file(project, "base.docker")
@@ -220,6 +223,10 @@ class Lifecycle:
                 "base.docker": base,
             }.items()
         ]
+        for filename in [".task.yml", "add.py", "add.py.template", "conftest.py", "test_public.py", "test_private.py"]:
+            content = self.file(project, f"python/add/{filename}")
+            for task in ["push_first", "push_second"]:
+                actions.append({"action": "create", "file_path": f"python/{task}/{filename}", "content": content})
         actions.append(
             {
                 "action": "create",
@@ -397,6 +404,9 @@ class Lifecycle:
         return student
 
     def push(self, solution: str) -> str:
+        return self.push_commits([("Solve add", {"python/add/add.py": solution})])
+
+    def push_commits(self, commits: list[tuple[str, dict[str, str]]]) -> str:
         repo = self.directory / "student"
         env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "E2E_GIT_TOKEN": self.student_token}
         askpass = self.directory / "askpass.sh"
@@ -411,35 +421,46 @@ class Lifecycle:
         for args in commands:
             result = subprocess.run(args, env=env, capture_output=True, text=True, check=False)
             assert result.returncode == 0, "Student clone failed"
-        (repo / "python/add/add.py").write_text(solution)
-        for args in [
-            ["git", "add", "python/add/add.py"],
-            [
-                "git",
-                "-c",
-                "user.name=Test Student",
-                "-c",
-                "user.email=student@example.test",
-                "commit",
-                "-m",
-                "Solve add",
-            ],
-            ["git", "push", "origin", "main"],
-        ]:
-            result = subprocess.run(args, cwd=repo, env=env, capture_output=True, text=True, check=False)
-            assert result.returncode == 0, f"Student {args[1]} failed"
-        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+        before = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+        commit_ids = []
+        for message, files in commits:
+            for filename, content in files.items():
+                path = repo / filename
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content)
+            for args in [
+                ["git", "add", "--", *files],
+                [
+                    "git",
+                    "-c",
+                    "user.name=Test Student",
+                    "-c",
+                    "user.email=student@example.test",
+                    "commit",
+                    "-m",
+                    message,
+                ],
+            ]:
+                result = subprocess.run(args, cwd=repo, env=env, capture_output=True, text=True, check=False)
+                assert result.returncode == 0, f"Student {args[1]} failed"
+            commit_ids.append(subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip())
+        result = subprocess.run(
+            ["git", "push", "origin", "main"], cwd=repo, env=env, capture_output=True, text=True, check=False
+        )
+        assert result.returncode == 0, "Student push failed"
+        self.evidence.setdefault("pushes", []).append({"before": before, "commits": commit_ids})
+        return commit_ids[-1]
 
-    def score(self) -> int:
+    def score(self, task: str = "add") -> int:
         response = requests.get(
             f"{self.app}/api/lifecycle/score",
             headers={"Authorization": f"Bearer {self.credentials['course_token']}"},
-            data={"username": "student", "task": "add"},
+            data={"username": "student", "task": task},
             timeout=30,
         )
         assert response.status_code == HTTPStatus.OK, "Score was not persisted in Manytask"
         payload = response.json()
-        assert payload["username"] == "student" and payload["task"] == "add"
+        assert payload["username"] == "student" and payload["task"] == task
         return int(payload["score"])
 
 
@@ -483,4 +504,21 @@ def test_course_lifecycle() -> None:
     assert score is not None and score.get_text(strip=True) == "100/100", (
         "Score is missing from the student's course page"
     )
+    test.stage("Push two task commits and an unrelated final commit together")
+    solution = "def add(a: int, b: int) -> int:\n    return a + b\n"
+    sha = test.push_commits(
+        [
+            ("Solve push_first", {"python/push_first/add.py": solution}),
+            ("Solve push_second", {"python/push_second/add.py": solution}),
+            ("Update notes", {"submission-notes.txt": "Both solutions are ready.\n"}),
+        ]
+    )
+    test.pipeline(test.student["id"], sha)
+    scores = {task: test.score(task) for task in ["push_first", "push_second"]}
+    assert scores == {"push_first": FULL_SCORE, "push_second": FULL_SCORE}
+    test.evidence["multi_commit_scores"] = scores
+    for intermediate in test.evidence["pushes"][-1]["commits"][:-1]:
+        pipelines = test.gl("GET", f"projects/{test.student['id']}/pipelines", params={"sha": intermediate})
+        assert not pipelines, "An intermediate commit unexpectedly got its own pipeline"
+    test.stage("Both earlier task commits earned 100/100 in the final commit's pipeline")
     test.stage("PASS: release → export → student push → hidden tests → Manytask score → course page")
