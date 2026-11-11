@@ -4,8 +4,8 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background-color: var(--bs-primary);
-    color: white;
+    background-color: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary-text-emphasis);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -36,4 +36,11 @@
 
 .nav-user-menu:hover {
     background-color: var(--bs-tertiary-bg);
+}
+
+.nav-user-menu > span {
+    max-width: 16ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }

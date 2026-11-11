@@ -11,19 +11,14 @@
     {% set max_started = app.storage_api.max_score_started(course_name) %}
     {% set solved_percent = "0.0" if max_started == 0 else (solved_score / max_started * 100) | round(1, 'common') %}
 
-    <nav class="navbar navbar-expand-lg bg-body fixed-top shadow-sm">
+    <nav class="navbar navbar-expand-xxl bg-body fixed-top">
         <div class="container-fluid d-flex justify-content-between align-items-center">
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar"
-                    aria-controls="navbarsExample04" aria-expanded="false" aria-label="Toggle navigation">
+                    aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
-            <a href="/" class="d-flex align-items-center text-decoration-none navbar-brand me-0">
-                <img class="d-none d-sm-block" src="{{ url_for('static', filename=course_favicon) }}" alt="favicon"
-                     width="32" height="32">
-                &nbsp;
-                <span class="fs-4 mb-0 ms-1 fw-bold text-gradient">Manytask</span>
-            </a>
+            {% include "_brand.html" %}
 
             <div class="collapse navbar-collapse ms-2" id="navbar">
                 <ul class="navbar-nav me-auto">
@@ -90,7 +85,7 @@
                 </ul>
             </div>
 
-            <div class="d-flex align-items-center">
+            <div class="mt-nav-account d-flex align-items-center">
                 <div class="dropdown">
                     <a href="#" class="nav-current-course text-decoration-none" data-bs-toggle="dropdown"
                        aria-expanded="false">

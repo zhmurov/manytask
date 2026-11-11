@@ -1,13 +1,7 @@
 body {
     margin: 0;
-    font-family: 'Source Code Pro', monospace;
     display: flex;
     text-decoration: none;
-}
-
-:root body * {
-    --bs-border-radius: 20px;
-    --bs-border-radius-sm: 10px;
 }
 
 .mt-version-badge {

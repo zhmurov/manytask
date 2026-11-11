@@ -1,0 +1,335 @@
+/* Manytask style guide 0.1. Assets are served locally; licenses live in brand/licenses. */
+@font-face {
+    font-family: "Montserrat";
+    src: url("../brand/fonts/Montserrat-Regular.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Montserrat";
+    src: url("../brand/fonts/Montserrat-SemiBold.woff2") format("woff2");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Nunito Sans";
+    src: url("../brand/fonts/NunitoSans-Regular.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Nunito Sans";
+    src: url("../brand/fonts/NunitoSans-SemiBold.woff2") format("woff2");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root,
+[data-bs-theme="light"] {
+    --mt-font-heading: "Montserrat", sans-serif;
+    --mt-font-body: "Nunito Sans", sans-serif;
+    --mt-turquoise: #17c3b2;
+    --mt-ink: #202b35;
+    --mt-surface: #fff;
+    --mt-surface-soft: #f4f5ef;
+    --mt-field-border: #82918e;
+    --mt-shadow: 0 8px 28px rgb(32 43 53 / 5%);
+    --bs-font-sans-serif: var(--mt-font-body);
+    --bs-body-font-family: var(--mt-font-body);
+    --bs-body-color: #202b35;
+    --bs-body-color-rgb: 32, 43, 53;
+    --bs-body-bg: #fffdf8;
+    --bs-body-bg-rgb: 255, 253, 248;
+    --bs-secondary-color: #53616b;
+    --bs-secondary-bg: #f0f2ed;
+    --bs-tertiary-bg: #f7f5ee;
+    --bs-border-color: #d9deda;
+    --bs-primary: #24697b;
+    --bs-primary-rgb: 36, 105, 123;
+    --bs-link-color: #24697b;
+    --bs-link-color-rgb: 36, 105, 123;
+    --bs-link-hover-color: #184b59;
+    --bs-link-hover-color-rgb: 24, 75, 89;
+    --bs-primary-bg-subtle: #e0f5ef;
+    --bs-primary-border-subtle: #a4d9ce;
+    --bs-primary-text-emphasis: #20584f;
+    --bs-success-bg-subtle: #e0f5e9;
+    --bs-success-text-emphasis: #176b56;
+    --bs-success-border-subtle: #afd5c5;
+    --bs-danger-bg-subtle: #fce8eb;
+    --bs-danger-text-emphasis: #a32e43;
+    --bs-danger-border-subtle: #edbac3;
+    --bs-warning-bg-subtle: #fff0d6;
+    --bs-warning-text-emphasis: #76501a;
+    --bs-warning-border-subtle: #edcf9c;
+    --bs-info-bg-subtle: #e5f0f4;
+    --bs-info-text-emphasis: #24697b;
+    --bs-info-border-subtle: #b3d2dd;
+    --bs-border-radius: 8px;
+    --bs-border-radius-sm: 6px;
+    --bs-border-radius-lg: 16px;
+}
+
+[data-bs-theme="dark"] {
+    --mt-surface: #202d34;
+    --mt-surface-soft: #25373d;
+    --mt-field-border: #829b9c;
+    --mt-shadow: 0 8px 28px rgb(0 0 0 / 12%);
+    --bs-body-color: #f1f3ed;
+    --bs-body-color-rgb: 241, 243, 237;
+    --bs-body-bg: #17242b;
+    --bs-body-bg-rgb: 23, 36, 43;
+    --bs-secondary-color: #b5c4c8;
+    --bs-secondary-bg: #2c3c43;
+    --bs-tertiary-bg: #202f36;
+    --bs-border-color: #3e5258;
+    --bs-primary: #75dfd0;
+    --bs-primary-rgb: 117, 223, 208;
+    --bs-link-color: #86e3d7;
+    --bs-link-color-rgb: 134, 227, 215;
+    --bs-link-hover-color: #b1f3e9;
+    --bs-link-hover-color-rgb: 177, 243, 233;
+    --bs-primary-bg-subtle: #23433f;
+    --bs-primary-border-subtle: #3d756b;
+    --bs-primary-text-emphasis: #a2ead8;
+    --bs-success-bg-subtle: #234039;
+    --bs-success-text-emphasis: #9ae1bf;
+    --bs-success-border-subtle: #487b65;
+    --bs-danger-bg-subtle: #482f3a;
+    --bs-danger-text-emphasis: #ffc1cc;
+    --bs-danger-border-subtle: #865463;
+    --bs-warning-bg-subtle: #493d29;
+    --bs-warning-text-emphasis: #ffdb9f;
+    --bs-warning-border-subtle: #8e7445;
+    --bs-info-bg-subtle: #283f4b;
+    --bs-info-text-emphasis: #afddeb;
+    --bs-info-border-subtle: #4c7284;
+}
+
+body {
+    min-height: 100vh;
+    flex-direction: column;
+    font-family: var(--mt-font-body);
+    font-synthesis: none;
+    line-height: 1.5;
+}
+
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6,
+.nav-link, .nav-current-course, .dropdown-item, .mt-card__name {
+    font-family: var(--mt-font-heading);
+    font-weight: 400;
+}
+
+h1 {
+    font-size: clamp(2rem, 4vw, 3rem);
+    line-height: 1.17;
+}
+
+h2 {
+    font-size: 1.5rem;
+    line-height: 1.3;
+}
+
+strong, b, .fw-bold {
+    font-weight: 600 !important;
+}
+
+code, pre, kbd, samp {
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+
+a {
+    text-underline-offset: 3px;
+}
+
+:focus-visible {
+    outline: 3px solid var(--bs-link-color);
+    outline-offset: 4px;
+}
+
+
+.mt-brand {
+    display: inline-flex;
+    flex-shrink: 0;
+    padding: 8px 0;
+    text-decoration: none;
+}
+
+.mt-brand img {
+    width: 183px;
+    height: auto;
+}
+
+.mt-brand-dark, [data-bs-theme="dark"] .mt-brand-light {
+    display: none;
+}
+
+[data-bs-theme="dark"] .mt-brand-dark {
+    display: block;
+}
+
+
+.mt-eyebrow {
+    margin-bottom: 12px;
+    color: var(--bs-link-color);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.btn {
+    --bs-btn-font-weight: 600;
+    --bs-btn-border-radius: 8px;
+    --bs-btn-padding-x: 1rem;
+    --bs-btn-padding-y: 0.55rem;
+    --bs-btn-focus-shadow-rgb: 23, 195, 178;
+}
+
+.btn-primary {
+    --bs-btn-color: #202b35;
+    --bs-btn-bg: #17c3b2;
+    --bs-btn-border-color: #17c3b2;
+    --bs-btn-hover-color: #202b35;
+    --bs-btn-hover-bg: #43d0bf;
+    --bs-btn-hover-border-color: #43d0bf;
+    --bs-btn-active-color: #202b35;
+    --bs-btn-active-bg: #50d6c6;
+    --bs-btn-active-border-color: #50d6c6;
+    --bs-btn-disabled-color: #202b35;
+    --bs-btn-disabled-bg: #17c3b2;
+    --bs-btn-disabled-border-color: #17c3b2;
+}
+
+.btn-outline-primary, .btn-outline-secondary {
+    --bs-btn-color: var(--bs-link-color);
+    --bs-btn-border-color: var(--mt-field-border);
+    --bs-btn-hover-color: var(--bs-body-color);
+    --bs-btn-hover-bg: var(--bs-primary-bg-subtle);
+    --bs-btn-hover-border-color: var(--bs-link-color);
+    --bs-btn-active-color: var(--bs-body-color);
+    --bs-btn-active-bg: var(--bs-primary-bg-subtle);
+    --bs-btn-active-border-color: var(--bs-link-color);
+}
+
+.form-control, .form-select {
+    background-color: var(--mt-surface);
+    border-color: var(--mt-field-border);
+    padding: 0.65rem 0.85rem;
+}
+
+.form-control:focus, .form-select:focus {
+    background-color: var(--mt-surface);
+    border-color: var(--bs-link-color);
+    box-shadow: 0 0 0 3px rgb(23 195 178 / 20%);
+}
+
+.form-select {
+    padding-right: 2.25rem;
+}
+
+
+.form-check-input:checked {
+    background-color: #24697b;
+    border-color: #24697b;
+}
+
+.form-signin {
+    border: 1px solid var(--bs-border-color);
+    box-shadow: var(--mt-shadow);
+}
+
+body > .bg-body-tertiary {
+    flex: 1;
+    min-height: 100vh;
+}
+
+
+.card, .modal-content, .dropdown-menu {
+    background-color: var(--mt-surface);
+    border-color: var(--bs-border-color);
+    box-shadow: var(--mt-shadow);
+}
+
+.dropdown-menu {
+    --bs-dropdown-link-active-bg: var(--bs-primary-bg-subtle);
+    --bs-dropdown-link-active-color: var(--bs-body-color);
+}
+
+.dropdown-item {
+    font-size: 0.875rem;
+}
+
+.mt-version-badge, .mt-cache-time {
+    font-size: 0.75rem;
+    pointer-events: none;
+}
+
+
+/* Keep data tables quiet and dense enough for scores. Do not recolor score cells. */
+body .tabulator {
+    background: var(--mt-surface);
+    color: var(--bs-body-color);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 12px;
+    font-family: var(--mt-font-body);
+    font-size: 0.875rem;
+}
+
+/* Give the score table a visible closing edge against the light footer. */
+[data-bs-theme="light"] #database-table.tabulator {
+    border-bottom: 1px solid var(--mt-field-border);
+}
+
+body .tabulator .tabulator-header,
+body .tabulator .tabulator-header .tabulator-col,
+body .tabulator .tabulator-footer {
+    background: var(--mt-surface-soft);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color);
+}
+
+body .tabulator .tabulator-row {
+    background: var(--mt-surface);
+    color: var(--bs-body-color);
+}
+
+body .tabulator .tabulator-row.tabulator-row-even {
+    background: var(--bs-body-bg);
+}
+
+body .tabulator .tabulator-row.tabulator-selectable:hover {
+    background: var(--bs-primary-bg-subtle);
+}
+
+body .tabulator .tabulator-cell {
+    border-color: var(--bs-border-color);
+}
+
+body .tabulator .tabulator-footer .tabulator-page {
+    color: var(--bs-body-color) !important;
+    background: var(--mt-surface) !important;
+    border-color: var(--bs-border-color);
+}
+body .tabulator .tabulator-footer .tabulator-page.active {
+    color: var(--bs-link-color) !important;
+    border-color: var(--bs-link-color);
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        scroll-behavior: auto !important;
+        transition: none !important;
+        animation: none !important;
+    }
+
+}

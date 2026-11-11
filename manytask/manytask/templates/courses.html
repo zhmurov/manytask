@@ -8,23 +8,27 @@
 {% block signout %}{% endblock %}
 
 {% block body %}
-    {% if username is defined %}
-        <div class="position-fixed top-0 end-0 p-3" style="z-index: 12">
+    <header class="mt-home-header">
+        {% include "_brand.html" %}
+        {% if username is defined %}
             {% include "_user_menu.html" %}
-        </div>
+        {% endif %}
+    </header>
+    {% if username is defined %}
         {% include "_user_menu_modal.html" %}
     {% endif %}
 
-    <div class="container-fluid d-flex flex-column justify-content-center align-items-center">
-        <h1 class="mt-4 mb-3">List of courses</h1>
-
-        <button id="toggleViewBtn" class="btn btn-outline-secondary btn-sm mb-3" title="Switch between list and table view">
-            <i class="fas fa-table me-1"></i><span id="toggleViewLabel">Table view</span>
-        </button>
+    <main class="mt-courses-page">
+        <div class="courses-section-heading">
+            <h1>Your courses</h1>
+            <button id="toggleViewBtn" class="btn btn-outline-secondary btn-sm" title="Switch between list and table view">
+                <i class="fas fa-table me-1"></i><span id="toggleViewLabel">Table view</span>
+            </button>
+        </div>
 
         {# ----- List view (default) ----- #}
         <div id="coursesListView">
-            <div class="d-flex justify-content-center">
+            <div class="d-flex justify-content-start">
                 <button id="toggleFinishedBtn" class="btn btn-outline-secondary mt-2 mb-2">
                     Show completed courses
                 </button>
@@ -33,7 +37,7 @@
             <div id="finishedWrapper" class="hidden mb-2">
                 <ul class="course-list">
                     {% if not courses | selectattr('status', 'equalto', 'finished') | list %}
-                        No finished courses yet.
+                        <li class="courses-empty">No finished courses yet.</li>
                     {% endif %}
                     {% for course in courses if course.status == 'finished' %}
                         <li class="course-item">
@@ -60,7 +64,7 @@
                         </div>
                     </li>
                 {% else %}
-                    Unfortunately, there are no courses yet.
+                    <li class="courses-empty">No courses yet. Join your first course below.</li>
                 {% endfor %}
             </ul>
         </div>
@@ -69,10 +73,10 @@
         <div id="coursesTableView" class="hidden courses-table-view">
             <div class="courses-filter-controls mb-3">
                 <div class="courses-search-input">
-                    <input id="courses-filter-value" type="text" class="form-control" placeholder="Search courses...">
+                    <input id="courses-filter-value" type="search" class="form-control" placeholder="Search courses..." aria-label="Search courses">
                     <i class="fas fa-search courses-search-icon"></i>
                 </div>
-                <select id="courses-status-filter" class="form-select courses-status-select">
+                <select id="courses-status-filter" class="form-select courses-status-select" aria-label="Course status">
                     <option value="">All statuses</option>
                 </select>
                 <button id="courses-filter-clear" class="btn btn-outline-secondary">
@@ -82,12 +86,15 @@
             <div id="courses-table"></div>
         </div>
 
-        <form class="course-search-form" id="registerCourseForm" style="padding-top: 3.5rem">
-            <div class="d-flex flex-column align-items-center" style="gap: 0.8rem;">
-                <label for="courseInput" class="course-search-label">Register on new course</label>
+        <form class="course-search-form" id="registerCourseForm">
+            <div>
+                <h2>Ready for something new?</h2>
+                <label for="courseInput" class="course-search-label">Enter a course title to join your next course.</label>
+            </div>
+            <div class="course-search-fields">
                 <input type="text" class="form-control" id="courseInput" placeholder="Course title..." required>
-                <button type="submit" class="btn btn-outline-primary px-4 py-2">
-                    Go
+                <button type="submit" class="btn btn-primary px-4 py-2">
+                    Join course <i class="fas fa-arrow-right ms-2" aria-hidden="true"></i>
                 </button>
             </div>
         </form>
@@ -108,7 +115,7 @@
                     data-bs-target="#createNamespaceModal">Create namespace</button>
             <a class="btn btn-primary mt-3" href="{{ url_for('instance_admin.instance_admin_panel') }}">Instance Admin panel</a>
         {% endif %}
-    </div>
+    </main>
 
     {% if is_instance_admin %}
         {% include "_create_namespace_modal.html" %}

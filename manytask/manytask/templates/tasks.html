@@ -39,6 +39,10 @@
         </button>
     </div>
 </div>
+<header class="mt-assignments-heading">
+    <p class="mt-eyebrow">{{ course_name }}</p>
+    <h1>Assignments</h1>
+</header>
 <div id="task-groups">
     {% for group in app.storage_api.get_groups(course_name, enabled=True, started=True) %}
         {% set total_group_score = group.tasks | rejectattr('is_bonus') | map(attribute='score') | sum %}
@@ -53,7 +57,7 @@
 
             <div class="d-block d-sm-flex justify-content-between align-items-start">
                 <div class="d-block flex-column align-items-start">
-                    <span class="fs-2 mb-0">{{ group.name }}</span>
+                    <h2 class="fs-3 mb-1">{{ group.name }}</h2>
                     <span class="score fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
                 </div>
 
@@ -124,7 +128,7 @@
             </div>
             <hr class="dashed mt-1">
 
-            <div class="container-fluid d-flex flex-wrap px-0" style="margin: -10px!important;">
+            <div class="mt-task-grid">
                 {#        <div class="container-fluid row px-0" style="margin: -10px!important;">#}
                 {% for task in group.tasks %}
                     {% if task.url %}
@@ -135,12 +139,16 @@
 
                     {% if scores.get(task.name, 0) == task.score %}
                         {% set task_tag = 'solved' %}
+                        {% set task_status = 'Completed' %}
                     {% elif scores.get(task.name, 0) > task.score %}
                         {% set task_tag = 'over_solved' %}
+                        {% set task_status = 'Above target' %}
                     {% elif scores.get(task.name, 0) > 0 %}
                         {% set task_tag = 'solved_partially' %}
+                        {% set task_status = 'In progress' %}
                     {% else %}
                         {% set task_tag = 'unsolved' %}
+                        {% set task_status = 'Not started' %}
                     {% endif %}
 
                     {% if task.is_special %}
@@ -153,8 +161,9 @@
 
                     <div class="mt-task-card rounded {{ task_tag }}" style="position: relative">
                         <a href="{{ task_link }}" class="d-flex flex-column align-items-center justify-content-center">
-                            <span class="fs-5 mt-card__name">{{ task.name }}</span>
-                            <span class="fs-1 fw-bold score">{{ scores.get(task.name, '0') }}/{{ task.score }}</span>
+                            <span class="fs-5 mt-card__name" title="{{ task.name }}">{{ task.name }}</span>
+                            <span class="fs-2 fw-semibold score">{{ scores.get(task.name, '0') }}/{{ task.score }}</span>
+                            <span class="mt-task-status">{{ task_status }}</span>
                             {#                        {% if not group.hw and demand_multipliers.get(task.name, '-') != '-' and scores.get(task.name, '-') == '-' %}#}
                             {#                            <div class="demand">#}
                             {#                                <div class="fs-6 stat"><i class="fa-solid fa-bolt"></i>{{ task_stats.get(task.name, '0') }}</div>#}
