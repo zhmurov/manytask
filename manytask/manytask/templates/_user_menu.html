@@ -41,6 +41,14 @@
             <hr class="dropdown-divider my-1">
         </li>
         <li>
+            <button type="button" class="dropdown-item d-flex align-items-center py-2"
+                    data-new-year-toggle aria-pressed="false" aria-controls="new-year-world">
+                <i class="fas fa-snowflake me-2 opacity-75" aria-hidden="true"></i>
+                <span>New Year mode</span>
+                <span class="ms-auto ps-3 small" data-new-year-status>Off</span>
+            </button>
+        </li>
+        <li>
             <a class="dropdown-item d-flex align-items-center py-2 text-danger"
                href="{{ url_for('root.logout') }}">
                 <i class="fas fa-sign-out-alt me-2"></i>
