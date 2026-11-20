@@ -504,6 +504,7 @@ def test_course_page_defers_scores_to_live_endpoint(app: Any, mock_gitlab_oauth:
     for index, card in enumerate(soup.select("[data-task-name]"), start=1):
         assert card["data-task-name"] == f"task{index}"
         assert card["data-max-score"] == str(max_scores[index - 1])
+        assert float(card["data-winter-deadline"]) == group.get_deadline(group.end).timestamp()
         assert card.select_one(".score").get_text(strip=True) == f"…/{max_scores[index - 1]}"
 
 

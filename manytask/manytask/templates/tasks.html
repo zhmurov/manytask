@@ -91,6 +91,7 @@
                             {% set is_less_than_day = deadline.timestamp() - now.timestamp() < 86400 %}
                             {% set is_expired = deadline < now %}
                             <div class="task-deadline {% if deadline < now %}passed-deadline{% endif %}"
+                                 data-winter-deadline="{{ deadline.timestamp() }}"
                                  {% if deadline < now %}style="display: none;"{% endif %}>
                                 <div class="deadline-header">
                                     <span class="deadline-percent">{{ (percent*100)|round|int }}%</span>
@@ -145,7 +146,8 @@
                     {% endif %}
 
                     <div class="mt-task-card rounded {{ task_tag }}" style="position: relative"
-                         data-task-name="{{ task.name }}" data-max-score="{{ task.score }}">
+                         data-task-name="{{ task.name }}" data-max-score="{{ task.score }}"
+                         data-winter-deadline="{{ group.end.timestamp() }}">
                         <a href="{{ task_link }}" class="d-flex flex-column align-items-center justify-content-center">
                             <span class="fs-5 mt-card__name">{{ task.name }}</span>
                             <span class="fs-1 fw-bold score">…/{{ task.score }}</span>
