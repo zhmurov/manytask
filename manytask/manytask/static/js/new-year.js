@@ -53,6 +53,7 @@ function winterSnowState(snow, ice, urgent, seconds, deposit = 0) {
     const canvas = world.querySelector('canvas');
     const footer = world.querySelector('.winter-footer');
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const mascot = typeof initWinterMascot === 'function' ? initWinterMascot(world, motion) : null;
     const storageKey = 'manytask-new-year';
     const records = new Map();
     let enabled = true;
@@ -223,6 +224,7 @@ function winterSnowState(snow, ice, urgent, seconds, deposit = 0) {
         stop();
         root.setAttribute('data-new-year', enabled ? 'on' : 'off');
         world.hidden = !enabled;
+        mascot?.setEnabled(enabled);
         toggles.forEach(toggle => {
             toggle.setAttribute('aria-pressed', String(enabled));
             toggle.querySelector('[data-new-year-status]').textContent = enabled ? 'On' : 'Off';

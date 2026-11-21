@@ -30,6 +30,13 @@ function applyCourseScores(container, snapshot) {
         `${total - bonus}${bonus > 0 ? `+${bonus}` : ''}/${snapshot.max_score}`;
 }
 
+function changedCourseScoreTasks(previous, current) {
+    if (previous === undefined) return [];
+    const value = (scores, name) => Object.hasOwn(scores, name) ? scores[name] : 0;
+    return [...new Set([...Object.keys(previous), ...Object.keys(current)])]
+        .filter(name => value(previous, name) !== value(current, name));
+}
+
 function initCourseScores(container, onUpdate) {
     const interval = 10000;
     const status = document.getElementById('scores-status');
@@ -38,6 +45,7 @@ function initCourseScores(container, onUpdate) {
     let inFlight = false;
     let stopped = false;
     let lastSnapshot;
+    let previousScores;
 
     async function refresh() {
         clearTimeout(timer);
@@ -64,9 +72,12 @@ function initCourseScores(container, onUpdate) {
             if (!document.hidden && !stopped && serialized !== lastSnapshot) {
                 applyCourseScores(container, snapshot);
                 onUpdate();
+                const tasks = changedCourseScoreTasks(previousScores, snapshot.scores);
+                previousScores = snapshot.scores;
                 lastSnapshot = serialized;
                 status.hidden = true;
                 container.setAttribute('aria-busy', 'false');
+                if (tasks.length) document.dispatchEvent(new CustomEvent('manytask:scores-changed', {detail: {tasks}}));
             }
             delay = interval;
         } catch {

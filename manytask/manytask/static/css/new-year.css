@@ -2,7 +2,7 @@
 html[data-new-year="on"] body {
     position: relative;
     min-height: 100vh;
-    padding-bottom: 200px;
+    padding-bottom: 290px;
 }
 
 #new-year-world, .winter-snowcap {
@@ -18,12 +18,20 @@ html[data-new-year="on"] body {
     z-index: 1020;
 }
 
+.winter-fireworks {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1021;
+}
+
 .winter-footer {
     position: absolute;
     bottom: 0;
     left: 0;
     width: 100%;
-    height: 190px;
+    height: 280px;
     overflow: hidden;
     --winter-ground: 24px;
 }
@@ -32,9 +40,9 @@ html[data-new-year="on"] body {
     position: absolute;
     inset: auto -2% 0;
     height: var(--winter-ground);
-    background: linear-gradient(#fff, #dfedf4);
+    background: linear-gradient(#c5e3f5, #92bcd6);
     border-radius: 48% 60% 0 0 / 24px 22px 0 0;
-    box-shadow: 0 -1px 0 #bfdce9;
+    box-shadow: 0 -1px 0 #79a8c5;
     transition: height 2s ease-out;
 }
 
@@ -46,6 +54,7 @@ html[data-new-year="on"] body {
     height: calc(100% + 13px);
     border-radius: 50% 70% 0 0 / 26px 35px 0 0;
     background: inherit;
+    box-shadow: 0 -1px 0 #79a8c5;
 }
 
 .winter-snowbank::after { right: 0; height: calc(100% + 6px); }
@@ -54,8 +63,8 @@ html[data-new-year="on"] body {
     position: absolute;
     bottom: 12px;
     left: 8%;
-    width: 160px;
-    height: 170px;
+    width: 240px;
+    height: 255px;
 }
 
 .winter-roller-track {
@@ -72,20 +81,41 @@ html[data-new-year="on"] body {
     left: 0;
     width: 200px;
     height: 145px;
-    overflow: visible;
     animation: winter-push 28s linear infinite;
     animation-delay: -10s;
 }
 
-.winter-mascot { animation: winter-step .75s ease-in-out infinite alternate; }
+/* Outrank normalize.css's svg:not(:root), so the mascot can leave its SVG
+ * while the ball stays put. The footer still clips at the window border. */
+svg.winter-roller { overflow: visible; }
+
+/* The feet share the ball's contact plane at y=144 in the SVG. */
+.winter-mascot { transform: translateY(7px); }
+.winter-mascot-upper { transform-origin: 77px 114px; }
 .winter-scarf { transform-origin: 50px 98px; animation: winter-scarf 1.5s ease-in-out infinite alternate; }
-.winter-leg-back { transform-origin: 65px 115px; animation: winter-walk .75s ease-in-out infinite alternate; }
-.winter-leg-front { transform-origin: 89px 115px; animation: winter-walk .75s ease-in-out infinite alternate-reverse; }
 .winter-snowball-spin {
     transform-origin: 166px 114px;
     animation: winter-roll 28s linear infinite;
     animation-delay: -10s;
 }
+
+.winter-celebrating .winter-roller,
+.winter-celebrating .winter-snowball-spin { animation-play-state: paused; }
+
+/* Short arms leave the body at its sides; the pose follows the activity. */
+.winter-arms-walking, .winter-arms-carrying, .winter-arms-resting { display: none; }
+[data-winter-celebration]:not([data-winter-celebration="rolling"]) .winter-arms-pushing { display: none; }
+:is([data-winter-celebration="leaving"], [data-winter-celebration="fetching"],
+    [data-winter-celebration="returning-to-ball"]) .winter-arms-walking { display: inline; }
+[data-winter-celebration="returning"] .winter-arms-carrying,
+[data-winter-celebration="firing"] .winter-arms-resting { display: inline; }
+.winter-arm-near { transform-origin: 111px 85px; }
+.winter-arm-far { transform-origin: 34px 83px; }
+
+.winter-firework-pack { opacity: 0; }
+[data-winter-celebration="returning"] .winter-firework-pack,
+[data-winter-celebration="firing"] .winter-firework-pack { opacity: 1; }
+[data-winter-celebration="firing"] .winter-firework-pack { transform: translateY(24px); }
 
 .winter-lights-a { animation: winter-twinkle 2.8s ease-in-out infinite alternate; }
 .winter-lights-b { animation: winter-twinkle 2.8s ease-in-out -1.4s infinite alternate; }
@@ -94,7 +124,7 @@ html[data-new-year="on"] body {
 .winter-surface { position: relative; }
 .winter-snowcap {
     position: absolute;
-    height: 42px;
+    height: 56px;
     z-index: 2;
     filter: drop-shadow(0 1px 0 rgb(51 135 158 / 40%));
 }
@@ -105,25 +135,27 @@ html[data-new-year="on"] body {
     background: linear-gradient(#d8efff, #b6d9ef 18px, #91bed9);
 }
 
-.winter-surface .winter-drift { transition: none; }
+.winter-surface .winter-drift, .winter-surface .winter-snowcap { transition: none; }
 
 .winter-snowcap::after {
     content: "";
     position: absolute;
     top: 14px;
-    left: var(--snow-rim, 15px);
-    right: var(--snow-rim, 15px);
-    height: var(--ice-depth, 0px);
-    background: linear-gradient(110deg, #e5f7ff 10%, #97cfe9 50%, #f3fcff 85%);
-    clip-path: polygon(0 0, 5% 0, 7% 80%, 10% 0, 22% 0, 24% 45%, 26% 0,
-        75% 0, 77% 70%, 80% 0, 89% 0, 92% 100%, 95% 0, 100% 0);
+    left: max(3px, calc(var(--snow-rim, 15px) - 10px));
+    right: max(3px, calc(var(--snow-rim, 15px) - 10px));
+    height: calc(var(--ice-depth, 0px) * 2.2);
+    background: linear-gradient(110deg, #d7f2ff 10%, #74b2d4 50%, #e8f8ff 85%);
+    clip-path: polygon(0 0, 3% 0, 6% 100%, 10% 0, 21% 0, 24% 28%, 27% 0,
+        73% 0, 76% 35%, 79% 0, 89% 0, 93% 90%, 97% 0, 100% 0);
     transition: height 2s ease-out;
 }
 
 .winter-melting .winter-drift { background: linear-gradient(#c5e8fc, #8fc4e1); }
+.winter-melting.task-deadline .deadline-header { padding-inline: 8px; }
 
 [data-bs-theme="dark"] .winter-snowbank { background: linear-gradient(#d9edf7, #afcddb); }
 [data-bs-theme="dark"] .winter-drift { background: linear-gradient(#effaff, #bddbe9); }
+[data-bs-theme="dark"] .winter-mascot { filter: drop-shadow(0 0 .8px rgb(229 247 255 / 80%)); }
 
 .winter-paused #new-year-world * { animation-play-state: paused; }
 
@@ -131,8 +163,6 @@ html[data-new-year="on"] body {
     from { transform: translateX(-220px); }
     to { transform: translateX(calc(100vw + 20px)); }
 }
-@keyframes winter-step { to { transform: translateY(-1.5px) rotate(-1deg); } }
-@keyframes winter-walk { to { transform: rotate(15deg); } }
 @keyframes winter-scarf { to { transform: rotate(-10deg); } }
 @keyframes winter-roll { to { transform: rotate(var(--winter-roll-turns, 5turn)); } }
 @keyframes winter-twinkle {
@@ -141,7 +171,9 @@ html[data-new-year="on"] body {
 }
 
 @media (max-width: 700px) {
-    .winter-tree { left: 3%; width: 125px; height: 150px; }
+    html[data-new-year="on"] body { padding-bottom: 240px; }
+    .winter-footer { height: 230px; }
+    .winter-tree { left: 2%; width: 170px; height: 200px; }
     .winter-roller { width: 165px; }
 }
 
@@ -150,6 +182,6 @@ html[data-new-year="on"] body {
         animation: none !important;
         transition: none !important;
     }
-    .winter-snowfall { display: none; }
+    .winter-snowfall, .winter-fireworks { display: none; }
     .winter-roller { left: max(145px, calc(100% - 280px)); }
 }

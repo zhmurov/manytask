@@ -42,11 +42,13 @@ function setup(cards = []) {
         return status;
     };
     document.querySelector = selector => selector === '[data-score-percent]' ? percent : total;
+    const changes = [];
+    document.addEventListener('manytask:scores-changed', event => changes.push(Array.from(event.detail.tasks)));
     const timers = new Map();
     let nextTimer = 0;
     const window = new EventTarget();
     const context = vm.createContext({
-        document, window, AbortSignal,
+        document, window, AbortSignal, CustomEvent,
         setTimeout: (callback, delay) => {
             const id = ++nextTimer;
             timers.set(id, {callback, delay});
@@ -55,7 +57,7 @@ function setup(cards = []) {
         clearTimeout: id => timers.delete(id),
     });
     vm.runInContext(source, context);
-    return {context, container, group, groupScore, percent, total, status, document, window, timers};
+    return {context, container, group, groupScore, percent, total, status, document, window, timers, changes};
 }
 
 function snapshot(scores, bonus = 0, max = 200) {
@@ -115,6 +117,38 @@ test('recomputes group completion after increases, reductions and missing scores
         context.applyCourseScores(container, snapshot(scores));
         assert.equal(group.dataset.groupSolved, solved);
     }
+});
+
+test('announces each changed task after initial loading, ignoring unchanged values and metadata', async () => {
+    const {context, container, timers, changes} = setup([card('one', 100), card('two', 100)]);
+    const snapshots = [
+        snapshot({one: 100, two: 0}),
+        snapshot({one: 100, two: 0}),
+        snapshot({one: 120, two: 50}),
+        snapshot({two: 50, one: 120}, 10),
+        snapshot({}),
+    ];
+    context.fetch = async () => ({ok: true, status: 200, json: async () => snapshots.shift()});
+    context.initCourseScores(container, () => {});
+    await settle();
+    assert.deepEqual(changes, []);
+    await tick(timers);
+    assert.deepEqual(changes, []);
+    await tick(timers);
+    assert.deepEqual(changes, [['one', 'two']]);
+    await tick(timers);
+    assert.equal(changes.length, 1);
+    await tick(timers);
+    assert.deepEqual(changes, [['one', 'two'], ['two', 'one']]);
+});
+
+test('score change detection treats missing values as zero and handles prototype-like task names', () => {
+    const {context} = setup();
+    const changed = (previous, current) => Array.from(context.changedCourseScoreTasks(previous, current));
+    assert.deepEqual(changed(undefined, {old: 100}), []);
+    assert.deepEqual(changed({}, {zero: 0}), []);
+    assert.deepEqual(changed({reset: 100}, {}), ['reset']);
+    assert.deepEqual(changed({}, JSON.parse('{"constructor":100,"__proto__":50}')), ['constructor', '__proto__']);
 });
 
 test('handles zero maxima and empty groups after scores load', () => {

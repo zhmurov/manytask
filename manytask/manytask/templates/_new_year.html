@@ -1,6 +1,7 @@
 {# Decorative only: the scene has its own space below the page's working content. #}
 <div id="new-year-world" hidden aria-hidden="true">
     <canvas class="winter-snowfall"></canvas>
+    <canvas class="winter-fireworks"></canvas>
     <div class="winter-footer">
         <div class="winter-snowbank"></div>
         <svg class="winter-tree" viewBox="0 0 180 190" focusable="false">
@@ -16,33 +17,75 @@
         </svg>
         <div class="winter-roller-track">
             <svg class="winter-roller" viewBox="0 0 220 160" focusable="false">
-                <ellipse cx="115" cy="145" rx="92" ry="5" fill="#33879e" opacity=".12"/>
-                <g class="winter-mascot">
-                    <g fill="none" stroke="#202b35" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-                        <path class="winter-leg-back" d="M64 114l-8 20-13 3"/>
-                        <path class="winter-leg-front" d="M89 114l10 19 13 2"/>
-                        <path d="M104 77q18 0 28 18l10 2"/>
+                <ellipse cx="166" cy="145" rx="32" ry="5" fill="#33879e" opacity=".12"/>
+                <g class="winter-mascot-traveler">
+                    <ellipse cx="76" cy="145" rx="48" ry="4" fill="#33879e" opacity=".12"/>
+                    <g class="winter-mascot-facing">
+                        <g class="winter-mascot">
+                            <g fill="none" stroke="#202b35" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+                                <path class="winter-leg-back" d="M64 114l-8 20-13 3"/>
+                                <path class="winter-leg-front" d="M89 114l10 19 13 2"/>
+                            </g>
+                            <g class="winter-mascot-upper">
+                                <g transform="rotate(8 77 80)">
+                                    <rect x="33" y="37" width="80" height="80" rx="22" fill="#17c3b2"/>
+                                    <path d="M52 70l37 47h11q13 0 13-19V72L96 58 75 82z" fill="#33879e"/>
+                                    <path d="M75 93l21-32" fill="none" stroke="#ffe2b3" stroke-width="14"/>
+                                    <path d="M98 65v55" fill="none" stroke="#f4717d" stroke-width="14" stroke-linecap="round"/>
+                                    <path d="M53 66l24 29" fill="none" stroke="#f4717d" stroke-width="14"/>
+                                    <path d="M53 66v54" fill="none" stroke="#ffcb77" stroke-width="14" stroke-linecap="round"/>
+                                    <path d="M91 72l7-10" stroke="#ffcb77" stroke-width="14" stroke-linecap="round"/>
+                                    <g fill="#202b35"><ellipse cx="72" cy="56" rx="2" ry="3"/><ellipse cx="87" cy="56" rx="2" ry="3"/></g>
+                                    <path d="M77 64q4 4 7-1" fill="none" stroke="#202b35" stroke-width="2" stroke-linecap="round"/>
+                                    <path d="M39 37Q59-7 97 17l12 20z" fill="#f4717d"/>
+                                    <path d="M51 24q22-24 45-7" fill="none" stroke="#df6271" stroke-width="3"/>
+                                    <rect x="34" y="32" width="82" height="13" rx="6" fill="#fff8eb"/>
+                                    <circle cx="100" cy="15" r="9" fill="#fff8eb"/>
+                                    <path d="M35 91q39 13 77-1l1 11q-41 13-79-1z" fill="#ffe2b3"/>
+                                    <path class="winter-scarf" d="M46 96l-5 31 14 2 3-31" fill="#ffe2b3"/>
+                                    <path d="M44 116l12 2M44 122l11 2" stroke="#f4717d" stroke-width="3"/>
+                                </g>
+                                <g fill="none" stroke="#202b35" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <g class="winter-arms-pushing">
+                                        <path d="M109 80C122 81 125 91 138 99"/>
+                                        <ellipse cx="139" cy="100" rx="3.2" ry="5" transform="rotate(-25 139 100)" fill="#202b35" stroke="none"/>
+                                        <path d="M110 95C120 97 123 113 135 116"/>
+                                        <ellipse cx="136" cy="117" rx="3.2" ry="5" transform="rotate(10 136 117)" fill="#202b35" stroke="none"/>
+                                    </g>
+                                    <g class="winter-arms-walking">
+                                        <g class="winter-arm-far">
+                                            <path d="M34 83C25 90 23 99 25 107"/>
+                                            <ellipse cx="25" cy="109" rx="3.4" ry="4.8" transform="rotate(-15 25 109)" fill="#202b35" stroke="none"/>
+                                        </g>
+                                        <g class="winter-arm-near">
+                                            <path d="M111 85C117 91 121 99 120 108"/>
+                                            <ellipse cx="120" cy="110" rx="3.4" ry="4.8" fill="#202b35" stroke="none"/>
+                                        </g>
+                                    </g>
+                                    <g class="winter-arms-carrying">
+                                        <path d="M34 83C25 90 23 99 25 107"/>
+                                        <ellipse cx="25" cy="109" rx="3.4" ry="4.8" transform="rotate(-15 25 109)" fill="#202b35" stroke="none"/>
+                                        <path d="M111 85C119 94 124 104 134 106"/>
+                                        <ellipse cx="136" cy="106" rx="4.6" ry="3.4" fill="#202b35" stroke="none"/>
+                                    </g>
+                                    <g class="winter-arms-resting">
+                                        <path d="M34 83C28 92 27 100 29 109"/>
+                                        <ellipse cx="29" cy="111" rx="3.4" ry="4.8" fill="#202b35" stroke="none"/>
+                                        <path d="M111 85C116 94 117 102 116 110"/>
+                                        <ellipse cx="116" cy="112" rx="3.4" ry="4.8" fill="#202b35" stroke="none"/>
+                                    </g>
+                                </g>
+                            </g>
+                        </g>
+                        <g class="winter-firework-pack">
+                            <path d="M126 92v28m12-28v28m12-28v28" stroke="#8c6954" stroke-width="2"/>
+                            <path d="M120 75h12v23h-12z" fill="#f4717d"/><path d="M120 75l6-10 6 10z" fill="#ffe2b3"/>
+                            <path d="M132 80h12v23h-12z" fill="#17c3b2"/><path d="M132 80l6-10 6 10z" fill="#ffcb77"/>
+                            <path d="M144 73h12v23h-12z" fill="#ffcb77"/><path d="M144 73l6-10 6 10z" fill="#f4717d"/>
+                            <path d="M120 86h12m0 5h12m0-6h12" stroke="#fff8eb" stroke-width="3"/>
+                            <path d="M120 118h36" stroke="#33879e" stroke-width="4" stroke-linecap="round"/>
+                        </g>
                     </g>
-                    <g transform="rotate(8 77 80)">
-                        <rect x="33" y="37" width="80" height="80" rx="22" fill="#17c3b2"/>
-                        <path d="M52 70l37 47h11q13 0 13-19V72L96 58 75 82z" fill="#33879e"/>
-                        <path d="M75 93l21-32" fill="none" stroke="#ffe2b3" stroke-width="14"/>
-                        <path d="M98 65v55" fill="none" stroke="#f4717d" stroke-width="14" stroke-linecap="round"/>
-                        <path d="M53 66l24 29" fill="none" stroke="#f4717d" stroke-width="14"/>
-                        <path d="M53 66v54" fill="none" stroke="#ffcb77" stroke-width="14" stroke-linecap="round"/>
-                        <path d="M91 72l7-10" stroke="#ffcb77" stroke-width="14" stroke-linecap="round"/>
-                        <g fill="#202b35"><ellipse cx="72" cy="56" rx="2" ry="3"/><ellipse cx="87" cy="56" rx="2" ry="3"/></g>
-                        <path d="M77 64q4 4 7-1" fill="none" stroke="#202b35" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M39 37Q59-7 97 17l12 20z" fill="#f4717d"/>
-                        <path d="M51 24q22-24 45-7" fill="none" stroke="#df6271" stroke-width="3"/>
-                        <rect x="34" y="32" width="82" height="13" rx="6" fill="#fff8eb"/>
-                        <circle cx="100" cy="15" r="9" fill="#fff8eb"/>
-                        <path d="M35 91q39 13 77-1l1 11q-41 13-79-1z" fill="#ffe2b3"/>
-                        <path class="winter-scarf" d="M46 96l-5 31 14 2 3-31" fill="#ffe2b3"/>
-                        <path d="M44 116l12 2M44 122l11 2" stroke="#f4717d" stroke-width="3"/>
-                    </g>
-                    <path d="M42 84q16 22 43 14l45 11" fill="none" stroke="#202b35" stroke-width="5" stroke-linecap="round"/>
-                    <path d="M129 106l8 1m-8 3 7 2" stroke="#202b35" stroke-width="3" stroke-linecap="round"/>
                 </g>
                 <g class="winter-snowball-grow">
                     <g class="winter-snowball-spin">
