@@ -60,11 +60,19 @@ test('waits for valid layout and clears an active and pending sequence on reset'
 });
 
 function scene(reduced = false, options = {}) {
+    let pathWrites = 0;
+    let geometryReads = 0;
+    let lookups = 0;
+    let paints = 0;
+    let circles = 0;
+    let dots = [];
+    let maxBlur = 0;
+    let clears = 0;
     function element() {
         const classes = new Set();
         return {
             style: {}, dataset: {}, attributes: {},
-            setAttribute(name, value) { this.attributes[name] = value; },
+            setAttribute(name, value) { pathWrites++; this.attributes[name] = value; },
             classList: {add: name => classes.add(name), contains: name => classes.has(name),
                 toggle(name, force) { if (force) classes.add(name); else classes.delete(name); }},
         };
@@ -73,19 +81,19 @@ function scene(reduced = false, options = {}) {
     const roller = {...element(), getBoundingClientRect: () => ({...{left: 200, right: 400, width: 200}, ...options.roller})};
     const traveler = element();
     const facing = element();
-    const pack = {...element(), getBoundingClientRect: () => ({...{left: 350, top: 720, width: 35}, ...options.pack})};
+    const pack = {...element(), getBoundingClientRect: () => { geometryReads++; return {...{left: 350, top: 720, width: 35}, ...options.pack}; }};
     const footer = {...element(), getBoundingClientRect: () => ({...{top: 1600, bottom: 1800}, ...options.footer})};
     let strokes = 0;
     let points = [];
-    const canvas = {...element(), getContext: () => ({clearRect() { points = []; }, setTransform() {}, beginPath() {},
-        moveTo() {}, lineTo(x, y) { points.push({x, y}); }, arc() {}, fill() {}, stroke() { strokes++; }})};
+    const canvas = {...element(), getContext: () => ({set shadowBlur(value) { maxBlur = Math.max(maxBlur, value); }, clearRect() { clears++; points = []; paints = circles = 0; dots = []; }, setTransform() {}, beginPath() {},
+        moveTo() {}, lineTo(x, y) { points.push({x, y}); }, arc(x, y, radius) { circles++; if (radius < 2) dots.push({x, y}); }, fill() { paints++; }, stroke() { strokes++; paints++; }})};
     const upper = element();
     const backLeg = element();
     const frontLeg = element();
     const elements = {'.winter-mascot-upper': upper, '.winter-leg-back': backLeg, '.winter-leg-front': frontLeg, '.winter-roller-track': track, '.winter-roller': roller, '.winter-mascot-traveler': traveler,
         '.winter-mascot-facing': facing, '.winter-firework-pack': pack, '.winter-footer': footer, '.winter-fireworks': canvas};
     const world = {...element(), querySelector: selector => elements[selector]};
-    const document = Object.assign(new EventTarget(), {hidden: false, documentElement: {clientWidth: 1000}, querySelectorAll: () => options.cards || []});
+    const document = Object.assign(new EventTarget(), {hidden: false, documentElement: {clientWidth: 1000}, querySelectorAll: () => { lookups++; return options.cards || []; }});
     const window = Object.assign(new EventTarget(), {innerHeight: 800});
     const motion = Object.assign(new EventTarget(), {matches: reduced});
     const frames = new Map();
@@ -102,7 +110,7 @@ function scene(reduced = false, options = {}) {
         frames.delete(key);
         callback(time);
     }
-    return {document, window, motion, frames, track, traveler, facing, world, mascot, changed, advance, upper, backLeg, frontLeg, strokes: () => strokes, points: () => points};
+    return {document, window, motion, frames, track, traveler, facing, world, mascot, changed, advance, upper, backLeg, frontLeg, clears: () => clears, blur: () => maxBlur, paints: () => paints, circles: () => circles, dots: () => dots, reads: () => geometryReads, lookups: () => lookups, writes: () => pathWrites, strokes: () => strokes, points: () => points};
 }
 
 test('keeps the ball paused through fireworks and the walk back, then resumes rolling between queued tasks', () => {
@@ -110,6 +118,7 @@ test('keeps the ball paused through fireworks and the walk back, then resumes ro
     page.changed();
     page.advance(1000);
     assert.equal(page.world.dataset.winterCelebration, 'leaving');
+    assert.equal(page.clears(), 0);
     assert.equal(page.track.classList.contains('winter-celebrating'), true);
     let queued = false;
     let returns = 0;
@@ -231,7 +240,7 @@ test('celebrates while the mascot is offscreen horizontally or below the viewpor
     }
 });
 
-test('each queued task gets its own burst height using the card position at firing time', () => {
+test('each queued task gets surrounding bursts using the card position at firing time', () => {
     let top = 100;
     const page = scene(false, {cards: [
         {dataset: {taskName: 'one'}, getBoundingClientRect: () => ({left: 100, top, width: 100, height: 100})},
@@ -240,7 +249,7 @@ test('each queued task gets its own burst height using the card position at firi
     page.changed(['one', 'two']);
     let previous = 'rolling';
     let shot = 0;
-    const heights = [];
+    const centers = [];
     for (let time = 1000; time <= 40000; time += 50) {
         page.advance(time);
         const phase = page.world.dataset.winterCelebration;
@@ -249,14 +258,22 @@ test('each queued task gets its own burst height using the card position at firi
             // Scrolling/reordering while the mascot fetches fireworks must not leave a stale target.
             top = 260;
         }
-        if (phase === 'firing' && !heights[shot - 1] && page.points().length >= 72) {
-            heights[shot - 1] = page.points().slice(0, 72).reduce((sum, point) => sum + point.y, 0) / 72;
+        if (phase === 'firing' && !centers[shot - 1] && page.dots().length >= 36) {
+            const dots = page.dots().slice(0, 36);
+            centers[shot - 1] = {x: dots.reduce((sum, point) => sum + point.x, 0) / 36,
+                y: dots.reduce((sum, point) => sum + point.y, 0) / 36};
         }
         previous = phase;
     }
-    assert.equal(heights.length, 2);
-    assert.ok(Math.abs(heights[0] - 310) < 5, String(heights));
-    assert.ok(Math.abs(heights[1] - 550) < 5, String(heights));
+    assert.equal(centers.length, 2);
+    const context = vm.createContext({});
+    vm.runInContext(source, context);
+    for (const [index, rect] of [{left: 100, top: 260, width: 100, height: 100},
+        {left: 500, top: 500, width: 100, height: 100}].entries()) {
+        const targets = context.winterFireworkTargets(rect, 1000, 800);
+        assert.ok(targets.some(target => Math.hypot(target.x - centers[index].x, target.y - centers[index].y) < 5),
+            JSON.stringify({targets, center: centers[index]}));
+    }
 });
 
 
@@ -328,5 +345,96 @@ test('rolling keeps a planted foot fixed in screen space and preserves cadence a
         roller.left = wrap ? -219 : roller.left + pixels;
         page.advance(2050);
         assert.ok(Math.abs((before - ankle()) * 200 / 220 - pixels) < .01);
+    }
+});
+
+
+test('keeps the full burst while bounding canvas paints, layout reads and settled mascot writes', () => {
+    const page = scene(false, {footer: {top: 600, bottom: 800}, cards: [
+        {dataset: {taskName: 'one'}, getBoundingClientRect: () => ({left: 100, top: 200, width: 100, height: 100})},
+    ]});
+    page.changed();
+    let firingFrames = 0;
+    let settledWrites;
+    let fullBurst = false;
+    for (let time = 1000; time <= 20000; time += 50) {
+        page.advance(time);
+        if (page.world.dataset.winterCelebration !== 'firing') continue;
+        firingFrames++;
+        assert.ok(page.paints() <= 15, `Too many paints: ${page.paints()}`);
+        fullBurst ||= page.points().length >= 216 && page.circles() >= 108;
+        if (firingFrames === 20) settledWrites = page.writes();
+        if (firingFrames === 90) assert.equal(page.writes(), settledWrites);
+    }
+    assert.ok(firingFrames >= 100);
+    assert.equal(fullBurst, true);
+    assert.equal(page.lookups(), 1);
+    assert.equal(page.blur(), 0);
+    assert.ok(page.reads() <= 24, `Too many layout reads: ${page.reads()}`);
+});
+
+test('refreshes cached firework geometry immediately on scroll and resize', () => {
+    let top = 100;
+    const page = scene(false, {cards: [
+        {dataset: {taskName: 'one'}, getBoundingClientRect: () => ({left: 100, top, width: 100, height: 100})},
+    ]});
+    page.changed();
+    let time = 1000;
+    while (page.world.dataset.winterCelebration !== 'firing') { page.advance(time); time += 50; }
+    const reads = page.reads();
+    top = 250;
+    page.window.dispatchEvent(new Event('scroll'));
+    page.advance(time);
+    assert.equal(page.reads(), reads + 1);
+    page.window.dispatchEvent(new Event('resize'));
+    page.advance(time + 50);
+    assert.equal(page.reads(), reads + 2);
+    assert.equal(page.lookups(), 1);
+});
+
+
+test('spreads five bursts one to two card sizes away, leaving the solved card clear', () => {
+    const context = vm.createContext({});
+    vm.runInContext(source, context);
+    const rect = {left: 450, top: 330, width: 180, height: 120};
+    const center = {x: 540, y: 390};
+    const targets = context.winterFireworkTargets(rect, 1280, 900);
+    assert.equal(targets.length, 5);
+    assert.equal(new Set(targets.map(point => `${point.x},${point.y}`)).size, 5);
+    for (const point of targets) {
+        const distance = Math.hypot(point.x - center.x, point.y - center.y);
+        assert.ok(distance >= 180 - 1e-9 && distance <= 360 + 1e-9);
+        assert.ok(point.x < rect.left - 143 || point.x > rect.left + rect.width + 143 ||
+            point.y < rect.top - 179 || point.y > rect.top + rect.height + 143);
+    }
+    assert.ok(targets.some(point => point.x < center.x));
+    assert.ok(targets.some(point => point.x > center.x));
+    assert.ok(targets.some(point => point.y < center.y));
+    assert.ok(targets.some(point => point.y > center.y));
+});
+
+test('keeps burst centers visible and outside the card near mobile viewport borders', () => {
+    const context = vm.createContext({});
+    vm.runInContext(source, context);
+    for (const rect of [
+        {left: 10, top: 10, width: 135, height: 120},
+        {left: 245, top: 540, width: 135, height: 120},
+        {left: 55, top: 350, width: 135, height: 120},
+    ]) {
+        const points = context.winterFireworkTargets(rect, 390, 844);
+        assert.equal(new Set(points.map(point => `${point.x},${point.y}`)).size, 5);
+        for (const point of points) {
+            assert.ok(point.x >= 35 && point.x <= 355 && point.y >= 50 && point.y <= 794);
+            assert.ok(point.x < rect.left || point.x > rect.left + rect.width ||
+                point.y < rect.top || point.y > rect.top + rect.height);
+            const distance = Math.hypot(point.x - rect.left - rect.width / 2, point.y - rect.top - rect.height / 2);
+            assert.ok(distance >= 135 - 1e-9 && distance <= 270 + 1e-9);
+        }
+    }
+    for (const rect of [undefined, {left: 100, top: 1600, width: 135, height: 120}]) {
+        for (const point of context.winterFireworkTargets(rect, 320, 600)) {
+            assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y));
+            assert.ok(point.x >= 0 && point.x <= 320 && point.y >= 0 && point.y <= 600);
+        }
     }
 });
