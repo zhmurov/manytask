@@ -17,6 +17,9 @@
     </span>
 </div>
 {% endif %}
+<header class="mt-assignments-heading">
+    <h1>Assignments</h1>
+</header>
 <div class="mb-3 mt-2 d-flex flex-wrap gap-2 justify-content-between align-items-center">
     <span class="course-status-badge status-{{ course_status.value }}">
         <i class="fas
@@ -56,13 +59,13 @@
         {% endfor %}
         {% set solved_group_score = solved_group_scores|sum %}
 
-        <div class="container-fluid rounded mt-lecture {{ 'special' if group.special else '' }}"
+        <div class="container-fluid mt-lecture {{ 'special' if group.special else '' }}"
              data-group-start="{{ group.start.isoformat() }}"
              data-group-solved="{{ 'true' if completion.solved else 'false' }}">
 
-            <div class="d-block d-sm-flex justify-content-between align-items-start">
-                <div class="d-block flex-column align-items-start">
-                    <span class="fs-2 mb-0">{{ group.name }}</span>
+            <div class="mt-group-header">
+                <div class="mt-group-title">
+                    <h2 class="mb-1">{{ group.name }}</h2>
                     <span class="score fs-6 d-none d-sm-block">Score: {{ solved_group_score }}/{{ total_group_score }}</span>
                 </div>
 
@@ -131,10 +134,9 @@
                     {% endif %}
                 </div>
             </div>
-            <hr class="dashed mt-1">
+            <hr>
 
-            <div class="container-fluid d-flex flex-wrap px-0" style="margin: -10px!important;">
-                {#        <div class="container-fluid row px-0" style="margin: -10px!important;">#}
+            <div class="mt-task-grid">
                 {% for task in group.tasks %}
                     {% if task.url %}
                         {% set task_link = task.url %}
@@ -144,12 +146,16 @@
 
                     {% if scores.get(task.name, 0) == task.score %}
                         {% set task_tag = 'solved' %}
+                        {% set task_status = 'Completed' %}
                     {% elif scores.get(task.name, 0) > task.score %}
                         {% set task_tag = 'over_solved' %}
+                        {% set task_status = 'Above target' %}
                     {% elif scores.get(task.name, 0) > 0 %}
                         {% set task_tag = 'solved_partially' %}
+                        {% set task_status = 'Partial credit' %}
                     {% else %}
                         {% set task_tag = 'unsolved' %}
+                        {% set task_status = 'Not solved' %}
                     {% endif %}
 
                     {% if task.is_special %}
@@ -160,19 +166,12 @@
                         {% set task_tag = task_tag ~ ' bonus' %}
                     {% endif %}
 
-                    <div class="mt-task-card rounded {{ task_tag }}" style="position: relative">
+                    <div class="mt-task-card {{ task_tag }}">
                         <a href="{{ task_link }}" class="d-flex flex-column align-items-center justify-content-center">
-                            <span class="fs-5 mt-card__name">{{ task.name }}</span>
-                            <span class="fs-1 fw-bold score">{{ scores.get(task.name, '0') }}/{{ task.score }}</span>
-                            {#                        {% if not group.hw and demand_multipliers.get(task.name, '-') != '-' and scores.get(task.name, '-') == '-' %}#}
-                            {#                            <div class="demand">#}
-                            {#                                <div class="fs-6 stat"><i class="fa-solid fa-bolt"></i>{{ task_stats.get(task.name, '0') }}</div>#}
-                            {#                                <div class="demand-text">Low demand!<br>Only {{ task_stats.get(task.name, '0') }} of students solved this assignment.<br>Your score will be multiplied by {{ demand_multipliers.get(task.name, '1') | round(3, 'common') }}</div>#}
-                            {#                            </div>#}
-                            {#                        {% else %}#}
-                            {#                            <div class="fs-6 stat">{{ task_stats.get(task.name, '0') }}</div>#}
-                            {#                        {% endif %}#}
-                            <div class="fs-6 mt-card__stats">{% if task.is_special %}special&nbsp;{% endif %}
+                            <span class="mt-card__name" title="{{ task.name }}">{{ task.name }}</span>
+                            <span class="fs-2 fw-semibold score">{{ scores.get(task.name, '0') }}/{{ task.score }}</span>
+                            <span class="mt-task-status">{{ task_status }}</span>
+                            <div class="mt-card__stats">{% if task.is_special %}special&nbsp;{% endif %}
                                 {% if task.is_bonus %}bonus
                                     &nbsp;{% endif %}{{ task_stats.get(task.name, 0)|float|round(2) }}</div>
                         </a>

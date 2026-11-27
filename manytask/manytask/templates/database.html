@@ -7,11 +7,11 @@
         <div class="spinner-border text-secondary" style="width: 3rem; height: 3rem;"></div>
     </div>
     <div class="container-fluid position-relative">
-        <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
             <h2 class="mb-0">Course Database</h2>
 
             {% if is_course_admin %}
-            <div class="d-flex gap-2">
+            <div class="d-flex flex-wrap gap-2">
                 <button id="toggle-admins" class="btn btn-outline-secondary btn-sm" title="Toggle admin/staff rows">
                     <i class="fas fa-user-shield"></i> Hide Admins
                 </button>
@@ -26,7 +26,7 @@
 
             <div class="db-search-group">
                 <div class="db-search-input">
-                    <input id="filter-value" type="text" class="form-control pr-1" placeholder="Search...">
+                    <input id="filter-value" type="text" class="form-control" placeholder="Search..." aria-label="Search students">
                     <i class="fas fa-search db-search-icon"></i>
                 </div>
 
